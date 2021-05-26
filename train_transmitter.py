@@ -14,10 +14,10 @@ from agents.transmitter.transmitter import ARCH_CHOICE
 from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 
 # if is original, train model on original data; otherwise on revised data.
-IS_ORIGINAL = False
+IS_ORIGINAL = True
 
 TRANSMITTER_DIR = './tmp/transmitter'
-VERSION = "transmitter_revised"
+VERSION = "transmitter_original"
 
 
 def setup_task():
