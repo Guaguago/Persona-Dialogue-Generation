@@ -19,9 +19,9 @@ keyword2id, id2keyword, node2id, word2id = pkl_list
 # idea interface
 def inputs_for_KW_model(history, text, dict):
     context, last_two_utters = concat_last_2_utterances(history, text, dict)
-    utter_keywords = extract_keywords(context, keyword2id, 20)
-    utter_concepts = extract_concepts(context, node2id, 30, dict)
-    pass
+    last_two_utters_keywords = extract_keywords(context, keyword2id, 20)
+    last_two_utters_concepts = extract_concepts(context, node2id, 30, dict)
+    return last_two_utters, last_two_utters_keywords, last_two_utters_concepts
 
 
 def concat_last_2_utterances(history, text, dict):

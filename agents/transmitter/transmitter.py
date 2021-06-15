@@ -27,6 +27,7 @@ from agents.transmitter.seq2seq.model import Seq2seqModel
 from .gpt.model import Gpt2SeqModel
 from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
+from idea import inputs_for_KW_model
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
@@ -253,7 +254,8 @@ class TransformerAgent(Agent):
         self.encode_max_seq_len = opt['encode_max_seq_len'] if opt['encode_max_seq_len'] > 0 else None
         self.decode_max_seq_len = opt['decode_max_seq_len'] if opt['decode_max_seq_len'] > 0 else None
 
-        self.metrics = {'loss': 0.0, 'num_tokens': 0, 'correct_tokens': 0, 'total_skipped_batches': 0, 'correct_pred': 0, 'pred_count': 0}
+        self.metrics = {'loss': 0.0, 'num_tokens': 0, 'correct_tokens': 0, 'total_skipped_batches': 0,
+                        'correct_pred': 0, 'pred_count': 0}
 
         self.history = {}
         # batch share the same persona information
@@ -640,6 +642,9 @@ class TransformerAgent(Agent):
 
                 obs['persona'] = persona_given
 
+                # idea interface
+                obs['kw_model'] = inputs_for_KW_model(self.history, text_split[-1], self.dict)
+
             obs['text2vec'], obs['dis2vec'], obs['turn2vec'], obs['cur_turn'] = maintain_dialog_history(
                 self.history, obs,
                 reply=self.answers[self.batch_idx],
@@ -699,7 +704,8 @@ class TransformerAgent(Agent):
                 neg_label = torch.tensor([0] * negative_score.size(0), device=positive_score.device)
 
                 gen_loss = self.criterion(scores, tgt_seq) / target_tokens
-                class_loss = (self.class_criter(positive_score, pos_label) + self.class_criter(negative_score, neg_label))/2
+                class_loss = (self.class_criter(positive_score, pos_label) + self.class_criter(negative_score,
+                                                                                               neg_label)) / 2
                 loss = 0.6 * gen_loss + 0.4 * class_loss
                 # save loss to metrics
 
