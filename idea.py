@@ -5,7 +5,7 @@ import pickle
 
 _lemmatizer = WordNetLemmatizer()
 
-name_list = ['keyword2id', 'id2keyword', 'node2id']
+name_list = ['keyword2id', 'id2keyword', 'node2id', 'word2id']
 
 pkl_list = []
 for name in name_list:
@@ -13,26 +13,40 @@ for name in name_list:
               "rb") as f:
         pkl_list.append(pickle.load(f))
 
-keyword2id, id2keyword, node2id, = pkl_list
+keyword2id, id2keyword, node2id, word2id = pkl_list
 
 
 # idea interface
 def inputs_for_KW_model(history, text, dict):
-    context = concat_last_2_utterances(history, text)
+    context, last_two_utters = concat_last_2_utterances(history, text, dict)
     utter_keywords = extract_keywords(context, keyword2id, 20)
     utter_concepts = extract_concepts(context, node2id, 30, dict)
     pass
 
 
-def concat_last_2_utterances(history, text):
+def concat_last_2_utterances(history, text, dict):
     context = ''
     if text != '__silence__':
         context += text
+        minus_one = dict.split_tokenize(context)
+        minus_one = [word2id[w] if w in word2id else word2id["<unk>"] for w in minus_one]
+        minus_one = pad_sentence(minus_one, 30, word2id["<pad>"])
+    else:
+        minus_one = [0] * 30
+
     if history:
         history = history['labels'][0]
         if history != '__silence__':
             context = history + ' ' + context
-    return context
+            minus_two = dict.split_tokenize(history)
+            minus_two = [word2id[w] if w in word2id else word2id["<unk>"] for w in minus_two]
+            minus_two = pad_sentence(minus_two, 30, word2id["<pad>"])
+        else:
+            minus_two = [0] * 30
+    else:
+        minus_two = [0] * 30
+
+    return context, [minus_two, minus_one]
 
 
 def extract_keywords(context, keyword2id, max_sent_len):
