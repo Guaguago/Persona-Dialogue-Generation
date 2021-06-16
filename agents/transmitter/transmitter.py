@@ -27,7 +27,10 @@ from agents.transmitter.seq2seq.model import Seq2seqModel
 from .gpt.model import Gpt2SeqModel
 from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
+
+# idea interface
 from idea import inputs_for_KW_model
+from idea import vectorize
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
@@ -667,7 +670,7 @@ class TransformerAgent(Agent):
         return obs
 
     def predict(self, src_seq, src_seq_turn, src_seq_dis, tgt_seq=None, tgt_seq_turn=None, cands=None, valid_cands=None,
-                sampling_cands=None, is_training=False):
+                sampling_cands=None, is_training=False, idea_interface=None):
         """Produce a prediction from our model.
 
         Update the model using the targets if available, otherwise rank
@@ -871,6 +874,9 @@ class TransformerAgent(Agent):
         src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn, labels, valid_inds, cands, valid_cands, sampling_cands, is_training = self.vectorize(
             observations)
 
+        # idea interface
+        inputs_for_kw_model = vectorize(observations)
+
         if src_seq is None:
             # no valid examples, just return empty responses
             return batch_reply
@@ -878,7 +884,7 @@ class TransformerAgent(Agent):
         # produce best_pred, train on targets if availables
         cand_inds = [i[0] for i in valid_cands] if valid_cands is not None else None
         predictions, cand_preds = self.predict(src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn, cands,
-                                               cand_inds, sampling_cands, is_training)
+                                               cand_inds, sampling_cands, is_training, idea_interface=inputs_for_kw_model)
 
         if is_training:
             report_freq = 0
