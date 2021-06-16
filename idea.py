@@ -2,10 +2,11 @@ from nltk.util import ngrams
 import nltk
 from nltk.stem import WordNetLemmatizer
 import pickle
+import torch
 
 _lemmatizer = WordNetLemmatizer()
 
-name_list = ['keyword2id', 'id2keyword', 'node2id', 'word2id']
+name_list = ['keyword2id', 'id2keyword', 'node2id', 'word2id', 'CN_hopk_graph_dict']
 
 pkl_list = []
 for name in name_list:
@@ -13,18 +14,36 @@ for name in name_list:
               "rb") as f:
         pkl_list.append(pickle.load(f))
 
-keyword2id, id2keyword, node2id, word2id = pkl_list
+keyword2id, id2keyword, node2id, word2id, CN_hopk_graph_dict = pkl_list
 
 
 # idea interface
+## one example for kw model
 def inputs_for_KW_model(history, text, dict):
-    context, last_two_utters = concat_last_2_utterances(history, text, dict)
+    context, last_two_utters = process_context(history, text, dict)
     last_two_utters_keywords = extract_keywords(context, keyword2id, 20)
     last_two_utters_concepts = extract_concepts(context, node2id, 30, dict)
     return last_two_utters, last_two_utters_keywords, last_two_utters_concepts
 
 
-def concat_last_2_utterances(history, text, dict):
+## one batch for kw model
+def vectorize(obs):
+    inputs_for_kw_model = {}
+    itr = zip(*[x['kw_model'] for x in obs])
+    batch_context = torch.LongTensor(next(itr))
+    batch_context_keywords = torch.LongTensor(next(itr))
+    batch_context_concepts = torch.LongTensor(next(itr))
+    CN_hopk_edge_index = torch.LongTensor(CN_hopk_graph_dict["edge_index"]).transpose(0, 1)  # (2, num_edges)
+
+    inputs_for_kw_model['batch_context'] = batch_context
+    inputs_for_kw_model['batch_context_keywords'] = batch_context_keywords
+    inputs_for_kw_model['batch_context_concepts'] = batch_context_concepts
+    inputs_for_kw_model['CN_hopk_edge_index'] = CN_hopk_edge_index
+    return inputs_for_kw_model
+
+
+# Others
+def process_context(history, text, dict):
     context = ''
     if text != '__silence__':
         context += text
