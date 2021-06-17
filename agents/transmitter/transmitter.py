@@ -29,8 +29,7 @@ from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
-from idea import inputs_for_KW_model
-from idea import vectorize
+from idea import inputs_for_KW_model, vectorize, next_utter_kw_prob
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
@@ -705,6 +704,9 @@ class TransformerAgent(Agent):
                 correct = ((tgt_seq == _preds) * y_ne).sum().item()
                 pos_label = torch.tensor([1] * positive_score.size(0), device=positive_score.device)
                 neg_label = torch.tensor([0] * negative_score.size(0), device=positive_score.device)
+
+                # idea interface
+                kw_prob = next_utter_kw_prob(inputs_for_kw_model=idea_interface, device=positive_score.device)
 
                 gen_loss = self.criterion(scores, tgt_seq) / target_tokens
                 class_loss = (self.class_criter(positive_score, pos_label) + self.class_criter(negative_score,
