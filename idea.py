@@ -3,6 +3,7 @@ import nltk
 from nltk.stem import WordNetLemmatizer
 import pickle
 import torch
+from kw_model import KW_GNN
 
 _lemmatizer = WordNetLemmatizer()
 
@@ -18,6 +19,56 @@ keyword2id, id2keyword, node2id, word2id, CN_hopk_graph_dict = pkl_list
 
 
 # idea interface
+def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
+    device = torch.device(device)
+    if use_keywords:
+        kw_model = load_kw_prediction_path.split("/")[-1][:-3]  # keyword prediction model name
+        if "GNN" in kw_model:
+            kw_model = "KW_GNN"
+            use_last_k_utterances = 2
+
+        # load pretrained model
+        print("Loading weights from ", load_kw_prediction_path)
+        kw_model_checkpoint = torch.load(load_kw_prediction_path, map_location=device)
+        if "word2id" in kw_model_checkpoint:
+            word2id = 100
+            word2id = kw_model_checkpoint.pop("word2id")
+
+        if "model_kwargs" in kw_model_checkpoint:
+            kw_model_kwargs = kw_model_checkpoint.pop("model_kwargs")
+            kw_model = globals()[kw_model](**kw_model_kwargs)
+        kw_model.load_state_dict(kw_model_checkpoint)
+        kw_model.to(device)
+        kw_model.eval()  # set to evaluation mode, no training required
+        return kw_model
+
+
+## load kw model
+kw_model = load_kw_model('saved_model/convai2/KW_GNN_Commonsense.pt', 'cpu')
+
+
+## kw model forward
+def next_utter_kw_prob(inputs_for_kw_model, device):
+    batch_context = inputs_for_kw_model['batch_context']
+    batch_context_keywords = inputs_for_kw_model['batch_context_keywords']
+    batch_context_concepts = inputs_for_kw_model['batch_context_concepts']
+    CN_hopk_edge_index = inputs_for_kw_model['CN_hopk_edge_index']
+    keyword_mask_matrix = get_keyword_mask_matrix(device)
+    with torch.no_grad():
+        kw_logits = kw_model(CN_hopk_edge_index, batch_context_keywords,
+                             x_utter=batch_context,
+                             x_concept=batch_context_concepts)  # (batch_size, keyword_vocab_size)
+
+        if keyword_mask_matrix is not None:
+            batch_vocab_mask = keyword_mask_matrix[batch_context_keywords].sum(dim=1).clamp(min=0,
+                                                                                            max=1)  # (batch_size, keyword_vocab_size)
+            kw_logits = (1 - batch_vocab_mask) * (
+                -5e4) + batch_vocab_mask * kw_logits  # (batch, vocab_size), masked logits
+    # top_kws = kw_logits.topk(3, dim=-1)[1]
+    # (batch_size, 3), need to convert to vocab token id based on word2id
+    return kw_logits
+
+
 ## one example for kw model
 def inputs_for_KW_model(history, text, dict):
     context, last_two_utters = process_context(history, text, dict)
@@ -43,6 +94,16 @@ def vectorize(obs):
 
 
 # Others
+def get_keyword_mask_matrix(device):
+    keyword_mask_matrix = torch.from_numpy(
+        CN_hopk_graph_dict["edge_mask"]).float()  # numpy array of (keyword_vocab_size, keyword_vocab_size)
+    print("building keyword mask matrix...")
+    keyword_vocab_size = len(keyword2id)
+    keyword_mask_matrix[torch.arange(keyword_vocab_size), torch.arange(keyword_vocab_size)] = 0  # remove self loop
+    keyword_mask_matrix = keyword_mask_matrix.to(device)
+    return keyword_mask_matrix
+
+
 def process_context(history, text, dict):
     context = ''
     if text != '__silence__':
