@@ -6,7 +6,6 @@ import torch
 from kw_model import KW_GNN
 
 _lemmatizer = WordNetLemmatizer()
-
 name_list = ['keyword2id', 'id2keyword', 'node2id', 'word2id', 'CN_hopk_graph_dict']
 
 pkl_list = []
@@ -93,6 +92,22 @@ def vectorize(obs):
     return inputs_for_kw_model
 
 
+def inputs_for_gate_module(src_seq, tgt_seq, dict):
+    def app_func(x):
+        word = dict.tokenizer.decode([x])
+        keyword = kw_format([word])[0]
+        if keyword in keyword2id:
+            return 1
+        else:
+            return 0
+
+    gate_labels = tgt_seq.clone()
+    gate_labels[gate_labels == 0] = -1
+    gate_labels[gate_labels != -1] = gate_labels[gate_labels != -1].apply_(app_func)
+    gate_labels = torch.cat([torch.full_like(src_seq[:, 0:1], -1), torch.full_like(src_seq, -1), gate_labels], 1)
+    return gate_labels
+
+
 # Others
 def get_keyword_mask_matrix(device):
     keyword_mask_matrix = torch.from_numpy(
@@ -161,6 +176,8 @@ def pad_sentence(sent, max_sent_len, pad_token):
 def kw_tokenize(string):
     return tokenize(string, [nltk_tokenize, lower, pos_tag, to_basic_form])
 
+def kw_format(string):
+    return tokenize(string, [pos_tag, to_basic_form])
 
 def tokenize(example, ppln):
     for fn in ppln:
