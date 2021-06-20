@@ -3,6 +3,8 @@ import nltk
 from nltk.stem import WordNetLemmatizer
 import pickle
 import torch
+import torch.nn as nn
+
 from kw_model import KW_GNN
 
 _lemmatizer = WordNetLemmatizer()
@@ -18,6 +20,31 @@ keyword2id, id2keyword, node2id, word2id, CN_hopk_graph_dict = pkl_list
 
 
 # idea interface
+
+def kw_word_map(dict):
+    map = [0] * 40516
+    tokenizer = dict.tokenizer
+    keys = tokenizer.decoder.keys()
+    count = 0
+    for idx in keys:
+        word = tokenizer.decode([idx])
+        basic_form_word = kw_format([word])[0]
+        if basic_form_word in keyword2id:
+            map[idx] = keyword2id[basic_form_word]
+            count += 1
+        else:
+            map[idx] = 0
+    return map
+
+
+## gate
+def gate(hidden_states):
+    sigmoid = nn.Sigmoid()
+    gate_linear = nn.Linear(hidden_states.shape[-1], 1)
+    gate = sigmoid(gate_linear(hidden_states))
+    return gate
+
+
 def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
     device = torch.device(device)
     if use_keywords:
@@ -93,6 +120,7 @@ def vectorize(obs):
 
 
 def inputs_for_gate_module(src_seq, tgt_seq, dict):
+    # len_gate_label = len(src) + len(tgt)
     def app_func(x):
         word = dict.tokenizer.decode([x])
         keyword = kw_format([word])[0]
@@ -101,11 +129,25 @@ def inputs_for_gate_module(src_seq, tgt_seq, dict):
         else:
             return 0
 
-    gate_labels = tgt_seq.clone()
-    gate_labels[gate_labels == 0] = -1
-    gate_labels[gate_labels != -1] = gate_labels[gate_labels != -1].apply_(app_func)
-    gate_labels = torch.cat([torch.full_like(src_seq[:, 0:1], -1), torch.full_like(src_seq, -1), gate_labels], 1)
-    return gate_labels
+    gate_label = tgt_seq.clone()
+    gate_label[gate_label == 0] = -1
+    gate_label[gate_label != -1] = gate_label[gate_label != -1].apply_(app_func)
+    # cls_mask = torch.full_like(tgt_seq[:, 0:1], -1)
+    # gate_label = torch.cat([torch.full_like(src_seq, -1), gate_label, cls_mask], 1)
+    # gate_label = torch.cat([gate_label, cls_mask], 1)
+
+    gate_mask = (gate_label != -1) + 0
+    gate_label.masked_fill_(gate_label == -1, 0)
+
+    lm_mask = (gate_label.sum(1) != 0).float().unsqueeze(1)
+    gate_mask = lm_mask.expand_as(gate_label) * gate_mask
+
+    gate = {
+        'lm_mask': lm_mask,
+        'gate_label': gate_label,
+        'gate_mask': gate_mask
+    }
+    return gate
 
 
 # Others
@@ -176,8 +218,10 @@ def pad_sentence(sent, max_sent_len, pad_token):
 def kw_tokenize(string):
     return tokenize(string, [nltk_tokenize, lower, pos_tag, to_basic_form])
 
+
 def kw_format(string):
     return tokenize(string, [pos_tag, to_basic_form])
+
 
 def tokenize(example, ppln):
     for fn in ppln:
