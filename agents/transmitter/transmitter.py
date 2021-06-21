@@ -29,7 +29,8 @@ from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
-from idea import inputs_for_KW_model, vectorize, next_utter_kw_prob
+from idea import inputs_for_KW_model, inputs_for_gate_module, vectorize, kw_probs_vocab, kw_word_map
+from idea import hybrid_kw_and_lm_probs
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
@@ -326,6 +327,10 @@ class TransformerAgent(Agent):
 
             # load dictionary and basic tokens & vectors
             self.dict = self.dictionary_class()(opt)
+
+            # idea interface
+            self.vocab_map = kw_word_map(self.dict)
+
             self.id = 'Transformer'
             # we use START markers to start our output
             self.START_IDX = self.dict[self.dict.start_token]
@@ -600,6 +605,9 @@ class TransformerAgent(Agent):
         shared['opt'] = self.opt
         shared['answers'] = self.answers
         shared['dict'] = self.dict
+        # idea interface
+        shared['vocab_map'] = self.vocab_map
+
         shared['START_IDX'] = self.START_IDX
         shared['END_IDX'] = self.END_IDX
         shared['NULL_IDX'] = self.NULL_IDX
@@ -705,15 +713,46 @@ class TransformerAgent(Agent):
                 pos_label = torch.tensor([1] * positive_score.size(0), device=positive_score.device)
                 neg_label = torch.tensor([0] * negative_score.size(0), device=positive_score.device)
 
-                # idea interface
-                kw_prob = next_utter_kw_prob(inputs_for_kw_model=idea_interface, device=positive_score.device)
+                ### idea interface ###
+                softmax = nn.Softmax(dim=-1)
+                lm_probs = softmax(scores)
+                for_gate = idea_interface['for_gate_module']
+                lm_mask = for_gate['lm_mask']
+                gate_label = for_gate['gate_label']
+                gate_mask = for_gate['gate_mask']
+                gate = out[-3]
 
-                gen_loss = self.criterion(scores, tgt_seq) / target_tokens
+                kw_probs = kw_probs_vocab(
+                    inputs_for_kw_model=idea_interface['for_kw_model'],
+                    size=lm_probs.size(),
+                    softmax=softmax,
+                    vocab_map=self.vocab_map,
+                    device=positive_score.device)
+
+                hybrid_probs = hybrid_kw_and_lm_probs(
+                    gate=gate,
+                    lm_mask=lm_mask,
+                    kw_probs=kw_probs,
+                    lm_probs=lm_probs)
+                hybrid_probs_clamp = hybrid_probs.clamp(min=1e-5)
+
+                gate_loss_fn = nn.BCELoss(weight=gate_mask.view(-1), reduction='mean')
+                gate_loss = gate_loss_fn(gate.view(-1), gate_label.view(-1).float())
+
+                gen_loss_fn = nn.NLLLoss(ignore_index=-1, reduction='mean')
+                gen_loss = gen_loss_fn(hybrid_probs_clamp.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
                 class_loss = (self.class_criter(positive_score, pos_label) + self.class_criter(negative_score,
                                                                                                neg_label)) / 2
-                loss = 0.6 * gen_loss + 0.4 * class_loss
-                # save loss to metrics
+                loss = 0.5 * gen_loss + 0.25 * class_loss + 0.25 * gate_loss
+                # idea interface: drop
+                # gen_loss = self.criterion(scores, tgt_seq) / target_tokens
 
+                # idea interface: drop
+                # loss = 0.6 * gen_loss + 0.4 * class_loss
+                # idea interface: add
+                ### idea end ###
+
+                # save loss to metrics
                 self.metrics['correct_tokens'] += correct
                 self.metrics['loss'] += gen_loss.item()
                 self.metrics['num_tokens'] += 1
@@ -877,7 +916,12 @@ class TransformerAgent(Agent):
             observations)
 
         # idea interface
-        inputs_for_kw_model = vectorize(observations)
+        data_for_kw_model = vectorize(observations)
+        data_for_gate = inputs_for_gate_module(src_seq, tgt_seq, self.dict)
+        idea_dict = {
+            'for_kw_model': data_for_kw_model,
+            'for_gate_module': data_for_gate
+        }
 
         if src_seq is None:
             # no valid examples, just return empty responses
@@ -886,7 +930,8 @@ class TransformerAgent(Agent):
         # produce best_pred, train on targets if availables
         cand_inds = [i[0] for i in valid_cands] if valid_cands is not None else None
         predictions, cand_preds = self.predict(src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn, cands,
-                                               cand_inds, sampling_cands, is_training, idea_interface=inputs_for_kw_model)
+                                               cand_inds, sampling_cands, is_training,
+                                               idea_interface=idea_dict)
 
         if is_training:
             report_freq = 0

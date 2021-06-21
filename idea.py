@@ -20,6 +20,12 @@ keyword2id, id2keyword, node2id, word2id, CN_hopk_graph_dict = pkl_list
 
 
 # idea interface
+def hybrid_kw_and_lm_probs(gate, lm_mask, kw_probs, lm_probs):
+    # for gate only optimize examples with keywords in the response
+    hybrid_probs = lm_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(
+        1) * kw_probs
+    return hybrid_probs
+
 
 def kw_word_map(dict):
     map = [0] * 40516
@@ -74,12 +80,12 @@ kw_model = load_kw_model('saved_model/convai2/KW_GNN_Commonsense.pt', 'cpu')
 
 
 ## kw model forward
-def next_utter_kw_prob(inputs_for_kw_model, device):
+def kw_probs_vocab(inputs_for_kw_model, size, softmax, vocab_map, device):
     batch_context = inputs_for_kw_model['batch_context']
     batch_context_keywords = inputs_for_kw_model['batch_context_keywords']
     batch_context_concepts = inputs_for_kw_model['batch_context_concepts']
     CN_hopk_edge_index = inputs_for_kw_model['CN_hopk_edge_index']
-    keyword_mask_matrix = get_keyword_mask_matrix(device)
+    keyword_mask_matrix = get_keyword_mask_matrix()
     with torch.no_grad():
         kw_logits = kw_model(CN_hopk_edge_index, batch_context_keywords,
                              x_utter=batch_context,
@@ -90,9 +96,14 @@ def next_utter_kw_prob(inputs_for_kw_model, device):
                                                                                             max=1)  # (batch_size, keyword_vocab_size)
             kw_logits = (1 - batch_vocab_mask) * (
                 -5e4) + batch_vocab_mask * kw_logits  # (batch, vocab_size), masked logits
+
+    expanded_kw_logits = kw_logits.unsqueeze(1).expand(-1, size[1], -1)
+    vocab_map = torch.tensor(vocab_map).unsqueeze(0).unsqueeze(1).expand(size)
+    kw_probs_vocab = softmax(expanded_kw_logits.gather(-1, vocab_map))
+
     # top_kws = kw_logits.topk(3, dim=-1)[1]
     # (batch_size, 3), need to convert to vocab token id based on word2id
-    return kw_logits
+    return kw_probs_vocab
 
 
 ## one example for kw model
@@ -151,13 +162,12 @@ def inputs_for_gate_module(src_seq, tgt_seq, dict):
 
 
 # Others
-def get_keyword_mask_matrix(device):
+def get_keyword_mask_matrix():
     keyword_mask_matrix = torch.from_numpy(
         CN_hopk_graph_dict["edge_mask"]).float()  # numpy array of (keyword_vocab_size, keyword_vocab_size)
     print("building keyword mask matrix...")
     keyword_vocab_size = len(keyword2id)
     keyword_mask_matrix[torch.arange(keyword_vocab_size), torch.arange(keyword_vocab_size)] = 0  # remove self loop
-    keyword_mask_matrix = keyword_mask_matrix.to(device)
     return keyword_mask_matrix
 
 
