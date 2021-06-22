@@ -1,1 +1,1 @@
-python train_receiver.py
+python train_transmitter.py
