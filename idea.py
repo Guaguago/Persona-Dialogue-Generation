@@ -80,12 +80,11 @@ kw_model = load_kw_model('saved_model/convai2/KW_GNN_Commonsense.pt', 'cpu')
 
 
 ## kw model forward
-def kw_probs_vocab(inputs_for_kw_model, size, softmax, vocab_map, device):
+def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix):
     batch_context = inputs_for_kw_model['batch_context']
     batch_context_keywords = inputs_for_kw_model['batch_context_keywords']
     batch_context_concepts = inputs_for_kw_model['batch_context_concepts']
     CN_hopk_edge_index = inputs_for_kw_model['CN_hopk_edge_index']
-    keyword_mask_matrix = get_keyword_mask_matrix()
     with torch.no_grad():
         kw_logits = kw_model(CN_hopk_edge_index, batch_context_keywords,
                              x_utter=batch_context,
@@ -97,13 +96,9 @@ def kw_probs_vocab(inputs_for_kw_model, size, softmax, vocab_map, device):
             kw_logits = (1 - batch_vocab_mask) * (
                 -5e4) + batch_vocab_mask * kw_logits  # (batch, vocab_size), masked logits
 
-    expanded_kw_logits = kw_logits.unsqueeze(1).expand(-1, size[1], -1)
-    vocab_map = torch.tensor(vocab_map).unsqueeze(0).unsqueeze(1).expand(size)
-    kw_probs_vocab = softmax(expanded_kw_logits.gather(-1, vocab_map))
-
     # top_kws = kw_logits.topk(3, dim=-1)[1]
     # (batch_size, 3), need to convert to vocab token id based on word2id
-    return kw_probs_vocab
+    return kw_logits
 
 
 ## one example for kw model
