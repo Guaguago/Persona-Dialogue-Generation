@@ -51,8 +51,7 @@ def gate(hidden_states):
     return gate
 
 
-def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
-    device = torch.device(device)
+def load_kw_model(load_kw_prediction_path, use_keywords=True):
     if use_keywords:
         kw_model = load_kw_prediction_path.split("/")[-1][:-3]  # keyword prediction model name
         if "GNN" in kw_model:
@@ -61,7 +60,7 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
 
         # load pretrained model
         print("Loading weights from ", load_kw_prediction_path)
-        kw_model_checkpoint = torch.load(load_kw_prediction_path, map_location=device)
+        kw_model_checkpoint = torch.load(load_kw_prediction_path)
         if "word2id" in kw_model_checkpoint:
             word2id = 100
             word2id = kw_model_checkpoint.pop("word2id")
@@ -70,13 +69,10 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
             kw_model_kwargs = kw_model_checkpoint.pop("model_kwargs")
             kw_model = globals()[kw_model](**kw_model_kwargs)
         kw_model.load_state_dict(kw_model_checkpoint)
-        kw_model.to(device)
         kw_model.eval()  # set to evaluation mode, no training required
         return kw_model
 
 
-## load kw model
-kw_model = load_kw_model('/apdcephfs/private_chencxu/p2/saved_model/convai2/KW_GNN_Commonsense.pt', 0)
 
 
 ## kw model forward

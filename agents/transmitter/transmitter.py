@@ -30,7 +30,7 @@ from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
 from idea import inputs_for_KW_model, inputs_for_gate_module, vectorize, cal_kw_logits, kw_word_map
-from idea import hybrid_kw_and_lm_probs, get_keyword_mask_matrix
+from idea import hybrid_kw_and_lm_probs, get_keyword_mask_matrix, load_kw_model
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
@@ -329,6 +329,8 @@ class TransformerAgent(Agent):
             self.dict = self.dictionary_class()(opt)
 
             # idea interface
+            ## load kw model
+            self.kw_model = load_kw_model('/apdcephfs/private_chencxu/p2/saved_model/convai2/KW_GNN_Commonsense.pt')
             self.vocab_map = kw_word_map(self.dict)
             self.keyword_mask_matrix = get_keyword_mask_matrix()
 
