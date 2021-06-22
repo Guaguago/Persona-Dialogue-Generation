@@ -609,6 +609,7 @@ class TransformerAgent(Agent):
         shared['answers'] = self.answers
         shared['dict'] = self.dict
         # idea interface
+        shared['kw_model'] = self.kw_model
         shared['vocab_map'] = self.vocab_map
         shared['keyword_mask_matrix'] = self.keyword_mask_matrix
 
