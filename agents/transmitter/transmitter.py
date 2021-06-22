@@ -29,8 +29,8 @@ from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
-from idea import inputs_for_KW_model, inputs_for_gate_module, vectorize, kw_probs_vocab, kw_word_map
-from idea import hybrid_kw_and_lm_probs
+from idea import inputs_for_KW_model, inputs_for_gate_module, vectorize, cal_kw_logits, kw_word_map
+from idea import hybrid_kw_and_lm_probs, get_keyword_mask_matrix
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
@@ -330,6 +330,7 @@ class TransformerAgent(Agent):
 
             # idea interface
             self.vocab_map = kw_word_map(self.dict)
+            self.keyword_mask_matrix = get_keyword_mask_matrix()
 
             self.id = 'Transformer'
             # we use START markers to start our output
@@ -607,6 +608,7 @@ class TransformerAgent(Agent):
         shared['dict'] = self.dict
         # idea interface
         shared['vocab_map'] = self.vocab_map
+        shared['keyword_mask_matrix'] = self.keyword_mask_matrix
 
         shared['START_IDX'] = self.START_IDX
         shared['END_IDX'] = self.END_IDX
@@ -684,10 +686,16 @@ class TransformerAgent(Agent):
         candidates as well if they are available and param is set.
         """
         predictions, cand_preds = None, None
+
+        # idea interface: for both train and generation codes.
+        for_kw_model = idea_interface['for_kw_model']
+        kw_logits = cal_kw_logits(for_kw_model, self.keyword_mask_matrix)
+
         if is_training:
             self.model.train()
             self.zero_grad()
             out = None
+
             try:
                 # keep the same interface
                 out = self.model.forward(src_seq=src_seq,
@@ -722,12 +730,9 @@ class TransformerAgent(Agent):
                 gate_mask = for_gate['gate_mask']
                 gate = out[-3]
 
-                kw_probs = kw_probs_vocab(
-                    inputs_for_kw_model=idea_interface['for_kw_model'],
-                    size=lm_probs.size(),
-                    softmax=softmax,
-                    vocab_map=self.vocab_map,
-                    device=positive_score.device)
+                expanded_kw_logits = kw_logits.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
+                vocab_map = torch.tensor(self.vocab_map).unsqueeze(0).unsqueeze(1).expand(lm_probs.size())
+                kw_probs = softmax(expanded_kw_logits.gather(-1, vocab_map))
 
                 hybrid_probs = hybrid_kw_and_lm_probs(
                     gate=gate,
@@ -777,7 +782,9 @@ class TransformerAgent(Agent):
                                      src_seq_dis=src_seq_dis,
                                      rank_during_training=cands is not None,
                                      cands=cands,
-                                     valid_cands=valid_cands)
+                                     valid_cands=valid_cands,
+                                     kw_logits=kw_logits,
+                                     vocab_map=self.vocab_map)
             predictions, cand_preds = out[0], out[2]
 
             if tgt_seq is not None:
