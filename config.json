@@ -1,0 +1,8 @@
+{
+  "Token": "VV1RwMuqh75jk0zjQHH5Fg",
+  "business_flag": "nlpc",
+  "model_local_file_path": "/root/projects/p2-kw-gate",
+  "host_num": 1,
+  "host_gpu_num": 1,
+  "image_full_name": "mirrors.tencent.com/guaguago/p2:latest"
+}
