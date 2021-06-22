@@ -12,7 +12,7 @@ name_list = ['keyword2id', 'id2keyword', 'node2id', 'word2id', 'CN_hopk_graph_di
 
 pkl_list = []
 for name in name_list:
-    with open('/Users/xuchen/core/pycharm/project/Persona-Dialogue-Generation/data/KWModel/{}.pkl'.format(name),
+    with open('/apdcephfs/private_chencxu/p2/data/KWModel/{}.pkl'.format(name),
               "rb") as f:
         pkl_list.append(pickle.load(f))
 
