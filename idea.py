@@ -76,7 +76,7 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
 
 
 ## load kw model
-kw_model = load_kw_model('/apdcephfs/private_chencxu/p2/saved_model/convai2/KW_GNN_Commonsense.pt', 'cuda')
+kw_model = load_kw_model('/apdcephfs/private_chencxu/p2/saved_model/convai2/KW_GNN_Commonsense.pt', torch.device(0))
 
 
 ## kw model forward
