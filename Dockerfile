@@ -8,7 +8,7 @@ ENV BASH_ENV ~/.bashrc
 SHELL ["/bin/bash", "-c"]
 RUN echo "conda activate p2" >> ~/.bashrc
 RUN pip install torch==1.7.1+cu110 torchvision==0.8.2+cu110 torchaudio==0.7.2 -f https://download.pytorch.org/whl/torch_stable.html &&\
-    conda install -c psi4 gcc-5 && \
+    conda install -c psi4 gcc-5 &&\
     pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.7.1+cu110.html && \
     pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-1.7.1+cu110.html && \
     pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-1.7.1+cu110.html && \
