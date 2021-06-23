@@ -2,7 +2,7 @@ FROM mirrors.tencent.com/star_library/g-tlinux2.2-python3.6-cuda10.1-cudnn7.6-py
 COPY Anaconda3-2021.05-Linux-x86_64.sh /root/
 RUN export http_proxy="http://9.131.211.13:3128" &&\
     export https_proxy="http://9.131.211.13:3128" &&\
-    export no_proxy="tlinux-mirror.tencent-cloud.com,tlinux-mirrorlist.tencent-cloud.com,localhost,mirrors-tlinux.tencentyun.com,.oa.com,.local" &&\
+    export no_proxy="tlinux-mirror.tencent-cloud.com,tlinux-mirrorlist.tencent-cloud.com,localhost,mirrors-tlinux.tencentyun.com,.oa.com,.local"
 RUN bash /root/Anaconda3-2021.05-Linux-x86_64.sh -b -p &&\
     export PATH="/root/anaconda3/bin/:"$PATH &&\
     conda init &&\
