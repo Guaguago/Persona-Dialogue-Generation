@@ -120,12 +120,12 @@ def vectorize(obs):
     return inputs_for_kw_model
 
 
-def inputs_for_gate_module(tgt_seq, vocab_map):
+def inputs_for_gate_module(tgt_seq, vocab_map, device):
     # len_gate_label = len(src) + len(tgt)
 
     gate_label = tgt_seq.clone()
     gate_label[gate_label == 0] = -1
-    gate_label[gate_label != -1] = (torch.tensor(vocab_map).gather(0, gate_label[gate_label != -1]) != 0) + 0
+    gate_label[gate_label != -1] = (torch.tensor(vocab_map, device=device).gather(0, gate_label[gate_label != -1]) != 0) + 0
 
     gate_mask = (gate_label != -1) + 0
     gate_label.masked_fill_(gate_label == -1, 0)

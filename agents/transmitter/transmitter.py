@@ -927,7 +927,7 @@ class TransformerAgent(Agent):
 
         # idea interface
         data_for_kw_model = vectorize(observations)
-        data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map)
+        data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map, src_seq.device)
         idea_dict = {
             'for_kw_model': data_for_kw_model,
             'for_gate_module': data_for_gate
