@@ -334,7 +334,8 @@ class TransformerAgent(Agent):
             # idea interface
             ## load kw model
             self.kw_model = load_kw_model('/apdcephfs/private_chencxu/p2/saved_model/convai2/KW_GNN_Commonsense.pt', self.device)
-            self.vocab_map = kw_word_map(self.dict)
+            # self.kw_model = load_kw_model('/apdcephfs/private_chencxu/p2/saved_model/convai2/KW_GNN_Commonsense.pt', self.device)
+            self.vocab_map = kw_word_map(self.dict, self.device)
             self.keyword_mask_matrix = get_keyword_mask_matrix(self.device)
 
             self.id = 'Transformer'
@@ -738,8 +739,8 @@ class TransformerAgent(Agent):
                 gate = out[-3]
 
                 expanded_kw_logits = kw_logits.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
-                vocab_map = torch.tensor(self.vocab_map).unsqueeze(0).unsqueeze(1).expand(lm_probs.size())
-                kw_probs = softmax(expanded_kw_logits.gather(-1, vocab_map))
+                kw_probs = softmax(
+                    expanded_kw_logits.gather(-1, self.vocab_map.unsqueeze(0).unsqueeze(1).expand(lm_probs.size())))
 
                 hybrid_probs = hybrid_kw_and_lm_probs(
                     gate=gate,
@@ -931,7 +932,7 @@ class TransformerAgent(Agent):
 
         # idea interface
         data_for_kw_model = vectorize(observations, device=self.device)
-        data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map, device=self.device)
+        data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map)
         idea_dict = {
             'for_kw_model': data_for_kw_model,
             'for_gate_module': data_for_gate

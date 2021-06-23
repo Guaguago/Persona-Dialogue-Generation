@@ -438,7 +438,7 @@ class Gpt2SeqModel(nn.Module):
                 kw_logits_beam = kw_logits.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
                 sigmoid = nn.Sigmoid()
                 gate = sigmoid(gate_linear(hidden_states[:, -1, :]))
-                vocab_map_tensor = torch.tensor(vocab_map).unsqueeze(0).expand(batch_size * self.beam_size, -1)
+                vocab_map_tensor = vocab_map.unsqueeze(0).expand(batch_size * self.beam_size, -1)
                 kw_probs = softmax(kw_logits_beam.gather(-1, vocab_map_tensor))
                 hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
                 log_probs = torch.log(hybrid_probs)

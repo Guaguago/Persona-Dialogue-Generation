@@ -28,7 +28,7 @@ def hybrid_kw_and_lm_probs(gate, lm_mask, kw_probs, lm_probs):
     return hybrid_probs
 
 
-def kw_word_map(dict):
+def kw_word_map(dict, device):
     map = [0] * 40516
     tokenizer = dict.tokenizer
     keys = tokenizer.decoder.keys()
@@ -41,7 +41,7 @@ def kw_word_map(dict):
             count += 1
         else:
             map[idx] = 0
-    return map
+    return torch.tensor(map).to(device)
 
 
 ## gate
@@ -121,12 +121,12 @@ def vectorize(obs, device):
     return inputs_for_kw_model
 
 
-def inputs_for_gate_module(tgt_seq, vocab_map, device):
+def inputs_for_gate_module(tgt_seq, vocab_map):
     # len_gate_label = len(src) + len(tgt)
 
     gate_label = tgt_seq.clone()
     gate_label[gate_label == 0] = -1
-    gate_label[gate_label != -1] = (torch.tensor(vocab_map).to(device).gather(0, gate_label[gate_label != -1]) != 0) + 0
+    gate_label[gate_label != -1] = (vocab_map.gather(0, gate_label[gate_label != -1]) != 0) + 0
 
     gate_mask = (gate_label != -1) + 0
     gate_label.masked_fill_(gate_label == -1, 0)
@@ -148,7 +148,8 @@ def get_keyword_mask_matrix(device):
         CN_hopk_graph_dict["edge_mask"]).float().to(device)  # numpy array of (keyword_vocab_size, keyword_vocab_size)
     print("building keyword mask matrix...")
     keyword_vocab_size = len(keyword2id)
-    keyword_mask_matrix[torch.arange(keyword_vocab_size).to(device), torch.arange(keyword_vocab_size).to(device)] = 0  # remove self loop
+    keyword_mask_matrix[torch.arange(keyword_vocab_size).to(device), torch.arange(keyword_vocab_size).to(
+        device)] = 0  # remove self loop
     return keyword_mask_matrix
 
 
