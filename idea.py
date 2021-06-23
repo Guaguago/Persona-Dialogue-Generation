@@ -105,13 +105,13 @@ def inputs_for_KW_model(history, text, dict):
 
 
 ## one batch for kw model
-def vectorize(obs):
+def vectorize(obs, device):
     inputs_for_kw_model = {}
     itr = zip(*[x['kw_model'] for x in obs])
-    batch_context = torch.LongTensor(next(itr))
-    batch_context_keywords = torch.LongTensor(next(itr))
-    batch_context_concepts = torch.LongTensor(next(itr))
-    CN_hopk_edge_index = torch.LongTensor(CN_hopk_graph_dict["edge_index"]).transpose(0, 1)  # (2, num_edges)
+    batch_context = torch.LongTensor(next(itr), device=device)
+    batch_context_keywords = torch.LongTensor(next(itr), device=device)
+    batch_context_concepts = torch.LongTensor(next(itr), device=device)
+    CN_hopk_edge_index = torch.LongTensor(CN_hopk_graph_dict["edge_index"], device=device).transpose(0, 1)  # (2, num_edges)
 
     inputs_for_kw_model['batch_context'] = batch_context
     inputs_for_kw_model['batch_context_keywords'] = batch_context_keywords
