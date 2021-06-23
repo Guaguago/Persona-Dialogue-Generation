@@ -1,5 +1,6 @@
 from nltk.util import ngrams
 import nltk
+nltk.data.path.append('/apdcephfs/share_916081/chencxu/nltk_data')
 from nltk.stem import WordNetLemmatizer
 import pickle
 import torch
@@ -71,8 +72,6 @@ def load_kw_model(load_kw_prediction_path, use_keywords=True):
         kw_model.load_state_dict(kw_model_checkpoint)
         kw_model.eval()  # set to evaluation mode, no training required
         return kw_model
-
-
 
 
 ## kw model forward
