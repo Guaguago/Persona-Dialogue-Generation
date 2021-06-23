@@ -1,5 +1,8 @@
 FROM mirrors.tencent.com/star_library/g-tlinux2.2-python3.6-cuda10.1-cudnn7.6-pytorch1.7.1-torchvision0.8.2:latest
 COPY Anaconda3-2021.05-Linux-x86_64.sh /root/
+RUN export no_proxy=download.devcloud.oa.com &&\
+    wget "http://download.devcloud.oa.com/iProxy.sh" -O iProxy.sh &&\
+    source iProxy.sh -uninstall
 RUN export http_proxy="http://9.131.211.13:3128" &&\
     export https_proxy="http://9.131.211.13:3128" &&\
     export no_proxy="tlinux-mirror.tencent-cloud.com,tlinux-mirrorlist.tencent-cloud.com,localhost,mirrors-tlinux.tencentyun.com,.oa.com,.local"
