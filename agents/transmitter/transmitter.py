@@ -612,6 +612,7 @@ class TransformerAgent(Agent):
         shared['answers'] = self.answers
         shared['dict'] = self.dict
         # idea interface
+        shared['device'] = self.device
         shared['kw_model'] = self.kw_model
         shared['vocab_map'] = self.vocab_map
         shared['keyword_mask_matrix'] = self.keyword_mask_matrix
@@ -929,8 +930,8 @@ class TransformerAgent(Agent):
             observations)
 
         # idea interface
-        data_for_kw_model = vectorize(observations, device=src_seq.device)
-        data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map, src_seq.device)
+        data_for_kw_model = vectorize(observations, device=self.device)
+        data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map, device=self.device)
         idea_dict = {
             'for_kw_model': data_for_kw_model,
             'for_gate_module': data_for_gate
