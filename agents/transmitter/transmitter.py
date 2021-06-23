@@ -330,7 +330,7 @@ class TransformerAgent(Agent):
 
             # idea interface
             ## load kw model
-            self.kw_model = load_kw_model('/apdcephfs/private_chencxu/p2/saved_model/convai2/KW_GNN_Commonsense.pt')
+            self.kw_model = load_kw_model('saved_model/convai2/KW_GNN_Commonsense.pt')
             self.vocab_map = kw_word_map(self.dict)
             self.keyword_mask_matrix = get_keyword_mask_matrix()
 
@@ -692,7 +692,7 @@ class TransformerAgent(Agent):
 
         # idea interface: for both train and generation codes.
         for_kw_model = idea_interface['for_kw_model']
-        kw_logits = cal_kw_logits(for_kw_model, self.keyword_mask_matrix)
+        kw_logits = cal_kw_logits(for_kw_model, self.keyword_mask_matrix, self.kw_model)
 
         if is_training:
             self.model.train()
@@ -927,7 +927,7 @@ class TransformerAgent(Agent):
 
         # idea interface
         data_for_kw_model = vectorize(observations)
-        data_for_gate = inputs_for_gate_module(src_seq, tgt_seq, self.dict)
+        data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map)
         idea_dict = {
             'for_kw_model': data_for_kw_model,
             'for_gate_module': data_for_gate
