@@ -1,5 +1,6 @@
 from nltk.util import ngrams
 import nltk
+
 nltk.data.path.append('/apdcephfs/share_916081/chencxu/nltk_data')
 from nltk.stem import WordNetLemmatizer
 import pickle
@@ -55,23 +56,15 @@ def gate(hidden_states):
 def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
     if use_keywords:
         kw_model = load_kw_prediction_path.split("/")[-1][:-3]  # keyword prediction model name
-        if "GNN" in kw_model:
-            kw_model = "KW_GNN"
-            use_last_k_utterances = 2
-
-        # load pretrained model
         print("Loading weights from ", load_kw_prediction_path)
         kw_model_checkpoint = torch.load(load_kw_prediction_path, map_location=device)
-        if "word2id" in kw_model_checkpoint:
-            word2id = 100
-            word2id = kw_model_checkpoint.pop("word2id")
-
         if "model_kwargs" in kw_model_checkpoint:
             kw_model_kwargs = kw_model_checkpoint.pop("model_kwargs")
-            kw_model = globals()[kw_model](**kw_model_kwargs)
+            kw_model = globals()["KW_GNN"](**kw_model_kwargs)
         kw_model.load_state_dict(kw_model_checkpoint)
-        kw_model.eval()  # set to evaluation mode, no training required
-        return kw_model.to(device)
+        # pipline, no training required
+        kw_model.eval()
+        return kw_model
 
 
 ## kw model forward
