@@ -147,7 +147,7 @@ def get_keyword_mask_matrix(device):
         CN_hopk_graph_dict["edge_mask"]).float().to(device)  # numpy array of (keyword_vocab_size, keyword_vocab_size)
     print("building keyword mask matrix...")
     keyword_vocab_size = len(keyword2id)
-    keyword_mask_matrix[torch.arange(keyword_vocab_size), torch.arange(keyword_vocab_size)] = 0  # remove self loop
+    keyword_mask_matrix[torch.arange(keyword_vocab_size).to(device), torch.arange(keyword_vocab_size).to(device)] = 0  # remove self loop
     return keyword_mask_matrix
 
 
