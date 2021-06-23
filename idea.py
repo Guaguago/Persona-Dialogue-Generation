@@ -69,7 +69,7 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
         kw_model.load_state_dict(kw_model_checkpoint)
         # pipline, no training required
         kw_model.eval()
-        return kw_model
+        return kw_model.to(device)
 
 
 ## kw model forward
