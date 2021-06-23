@@ -5,11 +5,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
+from idea import gate
 
 
 class Gpt2SeqModel(nn.Module):
     def __init__(self, opt, vocab_size, pad_idx, start_idx, end_idx, special_token_len, dict, longest_label=1,
-                 length_penalty=1.0, diversity_groups=1, diversity_coef=0.2, annealing_topk=None, annealing=0, sample=False,
+                 length_penalty=1.0, diversity_groups=1, diversity_coef=0.2, annealing_topk=None, annealing=0,
+                 sample=False,
                  temperature=0.7):
         super().__init__()
         # original vocab size plus special vocab
@@ -17,7 +19,7 @@ class Gpt2SeqModel(nn.Module):
         self.token_type_dict = {}
         # max is 30
         for i in range(29):
-            self.token_type_dict['dis'+str(i)] = self.vocab_size + i
+            self.token_type_dict['dis' + str(i)] = self.vocab_size + i
         # pred for prediction turn embedding
         self.token_type_dict['pred'] = self.vocab_size + 29
         # the remaining 30 is the distance size
@@ -26,6 +28,9 @@ class Gpt2SeqModel(nn.Module):
         # regard input and output as one sentence, given the input as context, generate the next sentence.
         self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt',
                                                                        num_special_tokens=special_token_len)
+        # idea interface
+        self.gate_linear = nn.Linear(768, 1)
+
         self.pad_idx = pad_idx
         self.start_idx = start_idx
         self.end_idx = end_idx
@@ -52,8 +57,10 @@ class Gpt2SeqModel(nn.Module):
         self.linear = nn.Linear(768, 2, bias=False)
         nn.init.normal_(self.linear.weight, std=0.02)
 
-    def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None, valid_cands=None, prev_enc=None,
-                rank_during_training=False, sampling=False, sampling_cands=None):
+    def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
+                valid_cands=None, prev_enc=None,
+                rank_during_training=False, sampling=False, sampling_cands=None,
+                kw_logits=None, vocab_map=None):
         # concat src_seq and tgt_seq as one sentence, use start token to separate them.
         if tgt_seq is not None:
             # keep track of longest label we've ever seen
@@ -88,7 +95,13 @@ class Gpt2SeqModel(nn.Module):
                 dis_seq = torch.tensor(token_type_ids, device=input_seq.device, dtype=torch.long)
             else:
                 dis_seq = None
+
             lm_logits, hidden_states = self.transformer_module(input_seq, None, dis_seq)
+
+            # idea interface
+            sigmoid = nn.Sigmoid()
+            gate = sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :])).contiguous()
+
             # lm labels should mask the source sentence language model
             shift_logits = lm_logits[..., src_seq_len:-1, :].contiguous()
             # lm_labels = tgt_seq.clone()[..., 1:].contiguous()
@@ -117,11 +130,15 @@ class Gpt2SeqModel(nn.Module):
                 prior_dis = None
 
             if sampling:
-                predictions, scores, hidden_states = self.sample_decoding(batch_size, prior_context, prior_dis, self.topk)
+                predictions, scores, hidden_states = self.sample_decoding(batch_size, prior_context, prior_dis,
+                                                                          self.topk)
             elif self.training:
                 predictions, scores, hidden_states = self.train_greedy_decoding(batch_size, prior_context, prior_dis)
             elif self.beam_size > 1:
-                predictions, hidden_states = self.beam_search(batch_size, prior_context)
+                # idea interface: modified
+                predictions, hidden_states, gate = self.beam_search(batch_size, prior_context, self.gate_linear, kw_logits,
+                                                              vocab_map)
+
             else:
                 predictions, hidden_states = self.greedy_decoding(batch_size, prior_context, prior_dis)
 
@@ -182,7 +199,7 @@ class Gpt2SeqModel(nn.Module):
                     cand_scores = torch.cat(cand_scores, dim=0)
                     cand_preds = cand_scores.sort(1, True)[1]
 
-        return predictions, scores, cand_preds, cand_scores, positive_score, negative_score
+        return predictions, scores, cand_preds, cand_scores, gate, positive_score, negative_score
 
     # TODO: we do not do any penalty
     def _length_penalty(self, sequence_lengths):
@@ -265,7 +282,7 @@ class Gpt2SeqModel(nn.Module):
         last_logits = None
         for step in range(self.longest_label):
             logits, hidden_states = self.transformer_module.forward(past_input, None, past_dis)
-            last_logits= logits
+            last_logits = logits
             # logits, _ = self.transformer_module.forward(past)
             logits = logits[:, -1, :] / self.temperature
             # add score
@@ -334,7 +351,7 @@ class Gpt2SeqModel(nn.Module):
         last_logits = None
         for step in range(self.longest_label):
             logits, hidden_states = self.transformer_module.forward(past_input, None, past_dis)
-            last_logits= logits
+            last_logits = logits
             # logits, _ = self.transformer_module.forward(past)
             logits = logits[:, -1, :] / self.temperature
             # add score
@@ -387,7 +404,7 @@ class Gpt2SeqModel(nn.Module):
         pred_output = pred_output[..., :score_output.shape[1]].contiguous()
         return pred_output, score_output, hidden_states
 
-    def beam_search(self, batch_size, prior_context):
+    def beam_search(self, batch_size, prior_context, gate_linear, kw_logits, vocab_map):
         """
         beam search for the validating generation. Note we also impose the n-gram repeating, which is borrowed
         from https://github.com/pytorch/fairseq. The diversity is not useful here.
@@ -412,7 +429,20 @@ class Gpt2SeqModel(nn.Module):
                 outputs, hidden_states = self.transformer_module.forward(token_tensor)
 
                 logits = outputs[:, -1, :]
-                log_probs = F.log_softmax(logits, dim=-1)
+                softmax = nn.Softmax(dim=-1)
+
+                lm_probs = softmax(logits)
+                # lm_probs = F.log_softmax(logits, dim=-1)
+
+                # idea_interface
+                kw_logits_beam = kw_logits.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+                sigmoid = nn.Sigmoid()
+                gate = sigmoid(gate_linear(hidden_states[:, -1, :]))
+                vocab_map_tensor = torch.tensor(vocab_map).unsqueeze(0).expand(batch_size * self.beam_size, -1)
+                kw_probs = softmax(kw_logits_beam.gather(-1, vocab_map_tensor))
+                hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
+                log_probs = torch.log(hybrid_probs)
+
 
                 if 0 < self.no_repeat_ngram_size < step:
                     # for each beam and batch sentence, generate a list of previous ngrams
@@ -431,12 +461,14 @@ class Gpt2SeqModel(nn.Module):
 
                     if step + 2 - self.no_repeat_ngram_size >= 0:
                         # no banned tokens if we haven't generated no_repeat_ngram_size tokens yet
-                        banned_tokens = [calculate_banned_tokens(bbsz_idx) for bbsz_idx in range(batch_size * self.beam_size)]
+                        banned_tokens = [calculate_banned_tokens(bbsz_idx) for bbsz_idx in
+                                         range(batch_size * self.beam_size)]
                     else:
                         banned_tokens = [[] for bbsz_idx in range(batch_size * self.beam_size)]
 
                     for bbsz_idx in range(batch_size * self.beam_size):
-                        log_probs[bbsz_idx, banned_tokens[bbsz_idx]] = log_probs[bbsz_idx, banned_tokens[bbsz_idx]] * 100
+                        log_probs[bbsz_idx, banned_tokens[bbsz_idx]] = log_probs[
+                                                                           bbsz_idx, banned_tokens[bbsz_idx]] * 100
 
                 log_probs = log_probs.view(batch_size, self.beam_size, -1)
 
@@ -521,7 +553,7 @@ class Gpt2SeqModel(nn.Module):
                 best_seq = result[step, bests[step], 1:best_len - 1]
                 predicts.append(best_seq.tolist())
 
-        return predicts, hidden_states
+        return predicts, hidden_states, gate
 
     def score_sentence(self, receive_tokens, send_tokens):
         """
@@ -539,7 +571,7 @@ class Gpt2SeqModel(nn.Module):
 
         assert receive_tokens.size(1) == send_tokens.size(1)
         if cur_token_len > max_len:
-            receive_tokens = receive_tokens[:, :, cur_token_len-max_len:]
+            receive_tokens = receive_tokens[:, :, cur_token_len - max_len:]
 
         # TODO: send_tokens should be appended end_token for classification
         all_tokens = torch.cat((receive_tokens, start_tensor, send_tokens), dim=2).contiguous()
