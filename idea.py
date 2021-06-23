@@ -61,7 +61,7 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
 
         # load pretrained model
         print("Loading weights from ", load_kw_prediction_path)
-        kw_model_checkpoint = torch.load(load_kw_prediction_path, device)
+        kw_model_checkpoint = torch.load(load_kw_prediction_path, map_location=device)
         if "word2id" in kw_model_checkpoint:
             word2id = 100
             word2id = kw_model_checkpoint.pop("word2id")
@@ -125,7 +125,7 @@ def inputs_for_gate_module(tgt_seq, vocab_map, device):
 
     gate_label = tgt_seq.clone()
     gate_label[gate_label == 0] = -1
-    gate_label[gate_label != -1] = (torch.tensor(vocab_map, device=device).gather(0, gate_label[gate_label != -1]) != 0) + 0
+    gate_label[gate_label != -1] = (torch.tensor(vocab_map).to(device).gather(0, gate_label[gate_label != -1]) != 0) + 0
 
     gate_mask = (gate_label != -1) + 0
     gate_label.masked_fill_(gate_label == -1, 0)
