@@ -120,22 +120,12 @@ def vectorize(obs):
     return inputs_for_kw_model
 
 
-def inputs_for_gate_module(src_seq, tgt_seq, dict):
+def inputs_for_gate_module(src_seq, tgt_seq, vocab_map):
     # len_gate_label = len(src) + len(tgt)
-    def app_func(x):
-        word = dict.tokenizer.decode([x])
-        keyword = kw_format([word])[0]
-        if keyword in keyword2id:
-            return 1
-        else:
-            return 0
 
     gate_label = tgt_seq.clone()
     gate_label[gate_label == 0] = -1
-    gate_label[gate_label != -1] = gate_label[gate_label != -1].apply_(app_func)
-    # cls_mask = torch.full_like(tgt_seq[:, 0:1], -1)
-    # gate_label = torch.cat([torch.full_like(src_seq, -1), gate_label, cls_mask], 1)
-    # gate_label = torch.cat([gate_label, cls_mask], 1)
+    gate_label[gate_label != -1] = (torch.tensor(vocab_map).gather(0, gate_label[gate_label != -1]) != 0) + 0
 
     gate_mask = (gate_label != -1) + 0
     gate_label.masked_fill_(gate_label == -1, 0)
