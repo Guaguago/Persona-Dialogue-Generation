@@ -330,7 +330,7 @@ class TransformerAgent(Agent):
 
             # idea interface
             ## load kw model
-            self.kw_model = load_kw_model('saved_model/convai2/KW_GNN_Commonsense.pt')
+            self.kw_model = load_kw_model('/apdcephfs/private_chencxu/p2/saved_model/convai2/KW_GNN_Commonsense.pt')
             self.vocab_map = kw_word_map(self.dict)
             self.keyword_mask_matrix = get_keyword_mask_matrix()
 
