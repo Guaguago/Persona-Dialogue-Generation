@@ -56,6 +56,8 @@ def gate(hidden_states):
 def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
     if use_keywords:
         kw_model = load_kw_prediction_path.split("/")[-1][:-3]  # keyword prediction model name
+        if "GNN" in kw_model:
+            kw_model = "KW_GNN"
         print("Loading weights from ", load_kw_prediction_path)
         kw_model_checkpoint = torch.load(load_kw_prediction_path, map_location=device)
         if "word2id" in kw_model_checkpoint:
