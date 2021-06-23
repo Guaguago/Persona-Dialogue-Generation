@@ -120,7 +120,7 @@ def vectorize(obs):
     return inputs_for_kw_model
 
 
-def inputs_for_gate_module(src_seq, tgt_seq, vocab_map):
+def inputs_for_gate_module(tgt_seq, vocab_map):
     # len_gate_label = len(src) + len(tgt)
 
     gate_label = tgt_seq.clone()
