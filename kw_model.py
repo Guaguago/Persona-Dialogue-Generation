@@ -124,7 +124,7 @@ class KW_GNN(torch.nn.Module):
         emb = self.embedding.weight  # (keyword_vocab_size, emb_size)
         CN_hopk_out = None
         if CN_hopk_edge_index is not None:
-            node_emb = self.forward_concept(emb.to('cuda'), self.nodeid2wordid.to('cuda'))
+            node_emb = self.forward_concept(emb, self.nodeid2wordid.to('cuda'))
             CN_hopk_out = self.forward_gnn(node_emb, CN_hopk_edge_index)
 
         # aggregation
@@ -160,6 +160,6 @@ class KW_GNN(torch.nn.Module):
 
     def init_embedding(self, embedding, fix_word_embedding):
         print("initializing word embedding layer...")
-        self.embedding.weight.data.copy_(embedding)
+        self.embedding.weight.data.copy_(embedding).to('cuda')
         if fix_word_embedding:
             self.embedding.weight.requires_grad = False
