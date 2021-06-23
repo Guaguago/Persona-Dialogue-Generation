@@ -1,4 +1,4 @@
-FROM mirrors.tencent.com/star_library/g-tlinux2.2-python3.6-cuda11.0-cudnn8.1:latest
+FROM mirrors.tencent.com/star_library/g-tlinux2.2-python3.6-cuda10.1-cudnn7.6-pytorch1.7.1-torchvision0.8.2:latest
 COPY Anaconda3-2021.05-Linux-x86_64.sh /root/
 RUN bash /root/Anaconda3-2021.05-Linux-x86_64.sh -b -p &&\
     export PATH="/root/anaconda3/bin/:"$PATH &&\
