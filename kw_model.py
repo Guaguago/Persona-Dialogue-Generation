@@ -124,7 +124,7 @@ class KW_GNN(torch.nn.Module):
         emb = self.embedding.weight  # (keyword_vocab_size, emb_size)
         CN_hopk_out = None
         if CN_hopk_edge_index is not None:
-            node_emb = self.forward_concept(emb, self.nodeid2wordid)
+            node_emb = self.forward_concept(emb, self.nodeid2wordid.to('cuda'))
             CN_hopk_out = self.forward_gnn(node_emb, CN_hopk_edge_index)
 
         # aggregation
