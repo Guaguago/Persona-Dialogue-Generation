@@ -142,9 +142,9 @@ def inputs_for_gate_module(tgt_seq, vocab_map, device):
 
 
 # Others
-def get_keyword_mask_matrix():
+def get_keyword_mask_matrix(device):
     keyword_mask_matrix = torch.from_numpy(
-        CN_hopk_graph_dict["edge_mask"]).float()  # numpy array of (keyword_vocab_size, keyword_vocab_size)
+        CN_hopk_graph_dict["edge_mask"]).float().to(device)  # numpy array of (keyword_vocab_size, keyword_vocab_size)
     print("building keyword mask matrix...")
     keyword_vocab_size = len(keyword2id)
     keyword_mask_matrix[torch.arange(keyword_vocab_size), torch.arange(keyword_vocab_size)] = 0  # remove self loop

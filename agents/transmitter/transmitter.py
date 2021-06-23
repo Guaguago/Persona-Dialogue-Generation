@@ -308,6 +308,9 @@ class TransformerAgent(Agent):
             if self.use_cuda:
                 print('[ Using CUDA ]')
                 torch.cuda.set_device(opt['gpu'])
+                self.device = torch.device('cuda')
+            else:
+                self.device = torch.device('cpu')
 
             init_model = None
             # check first for 'init_model' for loading model from file
@@ -332,7 +335,7 @@ class TransformerAgent(Agent):
             ## load kw model
             self.kw_model = load_kw_model('/apdcephfs/private_chencxu/p2/saved_model/convai2/KW_GNN_Commonsense.pt')
             self.vocab_map = kw_word_map(self.dict)
-            self.keyword_mask_matrix = get_keyword_mask_matrix()
+            self.keyword_mask_matrix = get_keyword_mask_matrix(self.device)
 
             self.id = 'Transformer'
             # we use START markers to start our output
