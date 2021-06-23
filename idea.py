@@ -76,7 +76,6 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
 
 ## kw model forward
 def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
-    kw_model.to('cuda')
     batch_context = inputs_for_kw_model['batch_context']
     batch_context_keywords = inputs_for_kw_model['batch_context_keywords']
     batch_context_concepts = inputs_for_kw_model['batch_context_concepts']
