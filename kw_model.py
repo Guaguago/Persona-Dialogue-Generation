@@ -160,6 +160,6 @@ class KW_GNN(torch.nn.Module):
 
     def init_embedding(self, embedding, fix_word_embedding):
         print("initializing word embedding layer...")
-        self.embedding.weight.data.copy_(embedding).to('cuda')
+        self.embedding.weight.data.copy_(embedding)
         if fix_word_embedding:
             self.embedding.weight.requires_grad = False
