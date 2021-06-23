@@ -71,7 +71,7 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
             kw_model = globals()[kw_model](**kw_model_kwargs)
         kw_model.load_state_dict(kw_model_checkpoint)
         kw_model.eval()  # set to evaluation mode, no training required
-        return kw_model
+        return kw_model.to(device)
 
 
 ## kw model forward
