@@ -16,8 +16,8 @@ from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 # if is original, train model on original data; otherwise on revised data.
 IS_ORIGINAL = True
 
-# TRANSMITTER_DIR = './tmp/transmitter'
-TRANSMITTER_DIR = '/root/projects/p2-kw-gate/tmp/transmitter'
+TRANSMITTER_DIR = './tmp/transmitter'
+# TRANSMITTER_DIR = '/root/projects/p2-kw-gate/tmp/transmitter'
 VERSION = "transmitter_original"
 
 
@@ -85,8 +85,8 @@ def setup_args():
         rank_candidates=False,
         # task='tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands',
         model='agents.transmitter.transmitter:TransformerAgent',
-        # model_file='./tmp/transmitter/{}.model'.format(exp_name),
-        model_file='/root/projects/p2-kw-gate/tmp/transmitter/{}.model'.format(exp_name),
+        model_file='./tmp/transmitter/{}.model'.format(exp_name),
+        # model_file='/root/projects/p2-kw-gate/tmp/transmitter/{}.model'.format(exp_name),
         dict_tokenizer='split',
         datatype='train',
         gpt_lr=6.25e-5,
