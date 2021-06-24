@@ -103,18 +103,23 @@ def inputs_for_KW_model(history, text, dict):
 
 
 ## one batch for kw model
-def vectorize(obs, device):
+def prepare_inputs_for_kw_model(obs, device):
     inputs_for_kw_model = {}
-    itr = zip(*[x['kw_model'] for x in obs])
-    batch_context = torch.tensor(next(itr)).to(device)
-    batch_context_keywords = torch.tensor(next(itr)).to(device)
-    batch_context_concepts = torch.tensor(next(itr)).to(device)
-    CN_hopk_edge_index = torch.tensor(CN_hopk_graph_dict["edge_index"]).transpose(0, 1).to(device)  # (2, num_edges)
 
-    inputs_for_kw_model['batch_context'] = batch_context
-    inputs_for_kw_model['batch_context_keywords'] = batch_context_keywords
-    inputs_for_kw_model['batch_context_concepts'] = batch_context_concepts
-    inputs_for_kw_model['CN_hopk_edge_index'] = CN_hopk_edge_index
+    for_kw_models = [x['kw_model'] for x in obs if len(x['text2vec']) > 0]
+    itr = zip(*for_kw_models)
+    try:
+        batch_context = torch.tensor(next(itr)).to(device)
+        batch_context_keywords = torch.tensor(next(itr)).to(device)
+        batch_context_concepts = torch.tensor(next(itr)).to(device)
+        CN_hopk_edge_index = torch.tensor(CN_hopk_graph_dict["edge_index"]).transpose(0, 1).to(device)  # (2, num_edges)
+
+        inputs_for_kw_model['batch_context'] = batch_context
+        inputs_for_kw_model['batch_context_keywords'] = batch_context_keywords
+        inputs_for_kw_model['batch_context_concepts'] = batch_context_concepts
+        inputs_for_kw_model['CN_hopk_edge_index'] = CN_hopk_edge_index
+    except:
+        inputs_for_kw_model = None
     return inputs_for_kw_model
 
 

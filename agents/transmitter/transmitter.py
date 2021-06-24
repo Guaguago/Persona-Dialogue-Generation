@@ -29,7 +29,7 @@ from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
-from idea import inputs_for_KW_model, inputs_for_gate_module, vectorize, cal_kw_logits, kw_word_map
+from idea import inputs_for_KW_model, inputs_for_gate_module, prepare_inputs_for_kw_model, cal_kw_logits, kw_word_map
 from idea import hybrid_kw_and_lm_probs, get_keyword_mask_matrix, load_kw_model
 
 # lstm, transformer, gpt2
@@ -697,7 +697,9 @@ class TransformerAgent(Agent):
 
         # idea interface: for both train and generation codes.
         for_kw_model = idea_interface['for_kw_model']
-        kw_logits = cal_kw_logits(for_kw_model, self.keyword_mask_matrix, self.kw_model)
+        kw_logits = None
+        if for_kw_model:
+            kw_logits = cal_kw_logits(for_kw_model, self.keyword_mask_matrix, self.kw_model)
 
         if is_training:
             self.model.train()
@@ -931,7 +933,7 @@ class TransformerAgent(Agent):
             observations)
 
         # idea interface
-        data_for_kw_model = vectorize(observations, device=self.device)
+        data_for_kw_model = prepare_inputs_for_kw_model(observations, device=self.device)
         data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map)
         idea_dict = {
             'for_kw_model': data_for_kw_model,

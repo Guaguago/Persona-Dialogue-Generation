@@ -435,13 +435,16 @@ class Gpt2SeqModel(nn.Module):
                 # lm_probs = F.log_softmax(logits, dim=-1)
 
                 # idea_interface
-                kw_logits_beam = kw_logits.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
-                sigmoid = nn.Sigmoid()
-                gate = sigmoid(gate_linear(hidden_states[:, -1, :]))
-                vocab_map_tensor = vocab_map.unsqueeze(0).expand(batch_size * self.beam_size, -1)
-                kw_probs = softmax(kw_logits_beam.gather(-1, vocab_map_tensor))
-                hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
-                log_probs = torch.log(hybrid_probs)
+                if kw_logits != None:
+                    kw_logits_beam = kw_logits.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+                    sigmoid = nn.Sigmoid()
+                    gate = sigmoid(gate_linear(hidden_states[:, -1, :]))
+                    vocab_map_tensor = vocab_map.unsqueeze(0).expand(batch_size * self.beam_size, -1)
+                    kw_probs = softmax(kw_logits_beam.gather(-1, vocab_map_tensor))
+                    hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
+                    log_probs = torch.log(hybrid_probs)
+                else:
+                    log_probs = torch.log(lm_probs)
 
 
                 if 0 < self.no_repeat_ngram_size < step:
