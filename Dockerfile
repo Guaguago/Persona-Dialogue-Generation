@@ -1,4 +1,4 @@
-FROM mirrors.tencent.com/star_library/g-tlinux2.2-python3.6-cuda10.1-cudnn7.6-pytorch1.7.1-torchvision0.8.2:latest
+FROM mirrors.tencent.com/star_library/g-tlinux2.2-python2.7-cuda10.1:latest
 COPY Anaconda3-2021.05-Linux-x86_64.sh /root/
 RUN bash /root/Anaconda3-2021.05-Linux-x86_64.sh -b -p &&\
     export PATH="/root/anaconda3/bin/:"$PATH &&\
@@ -7,6 +7,15 @@ RUN bash /root/Anaconda3-2021.05-Linux-x86_64.sh -b -p &&\
 ENV BASH_ENV ~/.bashrc
 SHELL ["/bin/bash", "-c"]
 RUN echo "conda activate p2" >> ~/.bashrc
+RUN pip install torch==1.7.1+cu101 torchvision==0.8.2+cu101 torchaudio==0.7.2 -f https://download.pytorch.org/whl/torch_stable.html &&\
+    conda install -y psi4 gcc-5 &&\
+    pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
+    pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
+    pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
+    pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
+    pip install torch-geometric &&\
+    pip install tensorboardX &&\
+    pip install nltk
 RUN cd /root &&\
     git clone https://github.com/SivilTaram/transformers.git &&\
     cd /root/transformers &&\
@@ -15,13 +24,8 @@ RUN cd /root &&\
     git clone https://github.com/SivilTaram/ParlAI.git &&\
     cd /root/ParlAI &&\
     python setup.py install
-RUN pip install torch==1.7.1+cu101 torchvision==0.8.2+cu101 torchaudio==0.7.2 -f https://download.pytorch.org/whl/torch_stable.html &&\
-    conda install -c psi4 gcc-5 &&\
-    pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
-    pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
-    pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
-    pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
-    pip install torch-geometric &&\
-    pip install pytorch_pretrained_bert &&\
-    pip install tensorboardX &&\
-    pip install nltk
+RUN pip install pytorch_pretrained_bert
+
+
+
+
