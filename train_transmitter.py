@@ -85,8 +85,11 @@ def setup_args():
         rank_candidates=False,
         # task='tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands',
         model='agents.transmitter.transmitter:TransformerAgent',
-        model_file='./tmp/transmitter/{}.model'.format(exp_name),
-        # model_file='/root/projects/p2-kw-gate/tmp/transmitter/{}.model'.format(exp_name),
+        # model_file='./tmp/transmitter/{}.model'.format(exp_name),
+
+        datapath='/apdcephfs/private_chencxu/p2/data',
+        model_file='/apdcephfs/private_chencxu/p2/tmp/transmitter/{}.model'.format(exp_name),
+
         dict_tokenizer='split',
         datatype='train',
         gpt_lr=6.25e-5,
