@@ -4,5 +4,5 @@
   "model_local_file_path": "/root/projects/p2-kw-gate",
   "host_num": 1,
   "host_gpu_num": 1,
-  "image_full_name": "mirrors.tencent.com/guaguago/p2:latest"
+  "image_full_name": "mirrors.tencent.com/guaguago/p2-py3.7.10-cuda10.1-env:latest"
 }
