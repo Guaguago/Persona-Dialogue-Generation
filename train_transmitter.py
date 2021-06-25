@@ -87,8 +87,8 @@ def setup_args():
         model='agents.transmitter.transmitter:TransformerAgent',
         # model_file='./tmp/transmitter/{}.model'.format(exp_name),
 
-        datapath='/apdcephfs/private_chencxu/p2/data',
-        model_file='/apdcephfs/private_chencxu/p2/tmp/transmitter/{}.model'.format(exp_name),
+        datapath='/apdcephfs/share_916081/chencxu/p2/data',
+        model_file='/apdcephfs/share_916081/chencxu/p2/tmp/transmitter/{}.model'.format(exp_name),
 
         dict_tokenizer='split',
         datatype='train',
