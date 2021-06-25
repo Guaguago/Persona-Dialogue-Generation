@@ -1,1 +1,1 @@
-python train_transmitter.py
+python train_transmitter.py > /apdcephfs/private_chencxu/p2/console.txt
