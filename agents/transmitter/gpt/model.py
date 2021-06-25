@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
 from idea import gate
+import os
 
 
 class Gpt2SeqModel(nn.Module):
@@ -14,6 +15,7 @@ class Gpt2SeqModel(nn.Module):
                  sample=False,
                  temperature=0.7):
         super().__init__()
+        cache_model_dir = os.path.join(opt['datapath'], 'models', 'gpt_models')
         # original vocab size plus special vocab
         self.vocab_size = vocab_size + 40478
         self.token_type_dict = {}
@@ -25,8 +27,9 @@ class Gpt2SeqModel(nn.Module):
         # the remaining 30 is the distance size
         special_token_len += 30
         self.vocab_size += 29
+
         # regard input and output as one sentence, given the input as context, generate the next sentence.
-        self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt',
+        self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', cache_dir=cache_model_dir,
                                                                        num_special_tokens=special_token_len)
         # idea interface
         self.gate_linear = nn.Linear(768, 1)
@@ -136,8 +139,9 @@ class Gpt2SeqModel(nn.Module):
                 predictions, scores, hidden_states = self.train_greedy_decoding(batch_size, prior_context, prior_dis)
             elif self.beam_size > 1:
                 # idea interface: modified
-                predictions, hidden_states, gate = self.beam_search(batch_size, prior_context, self.gate_linear, kw_logits,
-                                                              vocab_map)
+                predictions, hidden_states, gate = self.beam_search(batch_size, prior_context, self.gate_linear,
+                                                                    kw_logits,
+                                                                    vocab_map)
 
             else:
                 predictions, hidden_states = self.greedy_decoding(batch_size, prior_context, prior_dis)
@@ -445,7 +449,6 @@ class Gpt2SeqModel(nn.Module):
                     log_probs = torch.log(hybrid_probs)
                 else:
                     log_probs = torch.log(lm_probs)
-
 
                 if 0 < self.no_repeat_ngram_size < step:
                     # for each beam and batch sentence, generate a list of previous ngrams
