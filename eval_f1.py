@@ -13,7 +13,9 @@ def setup_task():
 
 def setup_trained_weights():
     if IS_ORIGINAL:
-        weights_name = './tmp/psquare/psqaure_original.model'
+        # weights_name = './tmp/psquare/psqaure_original.model'
+        # weights_name = './tmp/transmitter/transmitter_original.model'
+        weights_name = '/apdcephfs/share_916081/chencxu/p2/tmp/transmitter/transmitter_original.model'
     else:
         weights_name = './tmp/psquare/psqaure_revised.model'
     return weights_name
@@ -45,7 +47,8 @@ if __name__ == '__main__':
         model_file=model_name,
         gpu=0,
         batchsize=10,
-        beam_size=2
+        beam_size=2,
+        display_examples=True
     )
     opt = parser.parse_args(print_args=False)
     eval_f1(opt, print_parser=parser)

@@ -16,8 +16,8 @@ from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 # if is original, train model on original data; otherwise on revised data.
 IS_ORIGINAL = True
 
-TRANSMITTER_DIR = './tmp/transmitter'
-# TRANSMITTER_DIR = '/root/projects/p2-kw-gate/tmp/transmitter'
+# TRANSMITTER_DIR = './tmp/transmitter'
+TRANSMITTER_DIR = '/apdcephfs/share_916081/chencxu/p2/tmp/transmitter'
 VERSION = "transmitter_original"
 
 
