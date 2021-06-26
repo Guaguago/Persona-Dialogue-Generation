@@ -144,7 +144,8 @@ class Gpt2SeqModel(nn.Module):
                                                                     vocab_map)
 
             else:
-                predictions, hidden_states = self.greedy_decoding(batch_size, prior_context, prior_dis)
+                predictions, hidden_states, gate = self.greedy_decoding(batch_size, prior_context, prior_dis,
+                                                                        self.gate_linear, kw_logits, vocab_map)
 
             positive_score = self.linear(hidden_states[:, -1, :])
 
@@ -209,7 +210,7 @@ class Gpt2SeqModel(nn.Module):
     def _length_penalty(self, sequence_lengths):
         return sequence_lengths
 
-    def greedy_decoding(self, batch_size, prior_context, prior_dis):
+    def greedy_decoding(self, batch_size, prior_context, prior_dis, gate_linear, kw_logits, vocab_map):
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
         is_end = torch.zeros(batch_size, dtype=torch.uint8, device=device)
@@ -222,7 +223,16 @@ class Gpt2SeqModel(nn.Module):
                 logits, hidden_states = self.transformer_module.forward(past_input, None, past_dis)
                 # logits, _ = self.transformer_module.forward(past)
                 logits = logits[:, -1, :] / self.temperature
-                log_probs = F.log_softmax(logits, dim=-1)
+                # log_probs = F.log_softmax(logits, dim=-1)
+
+                ### idea interface ###
+                softmax = nn.Softmax(dim=-1)
+                sigmoid = nn.Sigmoid()
+                lm_probs = softmax(logits)
+                gate = sigmoid(gate_linear(hidden_states[:, -1, :]))
+                kw_probs = softmax(kw_logits.gather(-1, vocab_map.unsqueeze(0).expand(batch_size, -1)))
+                hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
+                log_probs = torch.log(hybrid_probs)
 
                 if 0 < self.no_repeat_ngram_size < step:
                     # for each beam and batch sentence, generate a list of previous ngrams
@@ -265,7 +275,7 @@ class Gpt2SeqModel(nn.Module):
                 is_end = is_end | (predict_tok == self.end_idx).view(-1)
                 if (~is_end).sum() == 0:
                     break
-        return pred_output, hidden_states
+        return pred_output, hidden_states, gate
 
     def train_greedy_decoding(self, batch_size, prior_context, prior_dis):
         """
@@ -438,7 +448,7 @@ class Gpt2SeqModel(nn.Module):
                 lm_probs = softmax(logits)
                 # lm_probs = F.log_softmax(logits, dim=-1)
 
-                # idea_interface
+                #### idea_interface ####
                 if kw_logits != None:
                     kw_logits_beam = kw_logits.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
                     sigmoid = nn.Sigmoid()
