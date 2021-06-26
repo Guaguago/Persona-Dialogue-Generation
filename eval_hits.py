@@ -13,9 +13,9 @@ def setup_task():
 
 def setup_trained_weights():
     if IS_ORIGINAL:
-        weights_name = './tmp/psquare/psqaure_original.model'
+        weights_name = '/apdcephfs/share_916081/chencxu/p2/tmp/psquare/psqaure_original.model'
     else:
-        weights_name = './tmp/psquare/psqaure_revised.model'
+        weights_name = '/apdcephfs/share_916081/chencxu/p2/tmp/psquare/psqaure_revised.model'
     return weights_name
 
 
@@ -41,6 +41,7 @@ if __name__ == '__main__':
     parser = setup_args()
     model_name = setup_trained_weights()
     parser.set_params(
+        datapath='/apdcephfs/share_916081/chencxu/p2/data',
         model='agents.transmitter.transmitter:TransformerAgent',
         model_file=model_name,
         init_model_transmitter=model_name,
