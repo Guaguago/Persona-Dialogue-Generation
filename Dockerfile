@@ -1,31 +1,17 @@
 FROM mirrors.tencent.com/star_library/g-tlinux2.2-python2.7-cuda10.1:latest
 COPY Anaconda3-2021.05-Linux-x86_64.sh /root/
-RUN bash /root/Anaconda3-2021.05-Linux-x86_64.sh -b -p &&\
-    export PATH="/root/anaconda3/bin/:"$PATH &&\
+RUN bash /root/Anaconda3-2021.05-Linux-x86_64.sh -b -p
+COPY p2-env.zip /root/anaconda3/envs
+RUN cd /root/anaconda3/envs/ &&\
+    unzip p2-env.zip
+RUN export PATH="/root/anaconda3/bin/:"$PATH &&\
     conda init &&\
-    conda create -n p2 python=3.7.10
+    conda create --name p2 --clone p2-env
+RUN rm -rf /root/anaconda3/envs/p2-env &&\
+    rm /root/anaconda3/envs/p2-env.zip
 ENV BASH_ENV ~/.bashrc
 SHELL ["/bin/bash", "-c"]
 RUN echo "conda activate p2" >> ~/.bashrc
-RUN pip install torch==1.7.1+cu101 torchvision==0.8.2+cu101 torchaudio==0.7.2 -f https://download.pytorch.org/whl/torch_stable.html &&\
-    conda install -y psi4 gcc-5 &&\
-    pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
-    pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
-    pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
-    pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.7.1+cu101.html &&\
-    pip install torch-geometric &&\
-    pip install tensorboardX &&\
-    pip install nltk
-RUN cd /root &&\
-    git clone https://github.com/SivilTaram/transformers.git &&\
-    cd /root/transformers &&\
-    python setup.py install
-RUN cd /root &&\
-    git clone https://github.com/SivilTaram/ParlAI.git &&\
-    cd /root/ParlAI &&\
-    python setup.py install
-RUN pip install pytorch_pretrained_bert
-
 
 
 
