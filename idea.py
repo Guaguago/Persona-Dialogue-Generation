@@ -6,7 +6,7 @@ from nltk.stem import WordNetLemmatizer
 import pickle
 import torch
 import torch.nn as nn
-
+import numpy as np
 from kw_model import KW_GNN
 
 _lemmatizer = WordNetLemmatizer()
@@ -22,6 +22,65 @@ keyword2id, id2keyword, node2id, word2id, CN_hopk_graph_dict = pkl_list
 
 
 # idea interface
+def get_persona_kws(persona_str):
+    return extract_keywords(persona_str, keyword2id, 30)
+
+
+def prepare_batch_persona_kw_mask(obs, device):
+    batch_persona_kws = torch.tensor([o['persona_ground'] for o in obs if len(o['text2vec']) > 0]).to(device)
+    mask = torch.zeros(len(keyword2id)).to(device).unsqueeze(0).expand(len(obs), -1)
+    batch_persona_kws_mask = mask.scatter(dim=1, index=batch_persona_kws, src=torch.ones_like(mask))
+    batch_persona_kws_mask[:, 0:2] = 0
+    return batch_persona_kws_mask
+
+
+def get_kw_graph_distance_matrix(device):
+    kw_graph_distance_matrix = np.ones((len(keyword2id), len(keyword2id))) * 1000
+    kw_graph_distance_dict = load_pickle(
+        "/Users/xuchen/core/pycharm/project/Persona-Dialogue-Generation/data/ConceptNet/keyword_graph_weighted_distance_dict.pkl")
+    for node1, node2 in kw_graph_distance_dict.keys():
+        kw_graph_distance_matrix[keyword2id[node1], keyword2id[node2]] = kw_graph_distance_dict[(node1, node2)]
+
+    kw_graph_distance_matrix[np.isinf(kw_graph_distance_matrix)] = 1000
+    return torch.from_numpy(kw_graph_distance_matrix).to(device)
+
+
+## kw model forward
+def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
+    batch_context = inputs_for_kw_model['batch_context']
+    batch_context_keywords = inputs_for_kw_model['batch_context_keywords']
+    batch_context_concepts = inputs_for_kw_model['batch_context_concepts']
+    CN_hopk_edge_index = inputs_for_kw_model['CN_hopk_edge_index']
+    with torch.no_grad():
+        kw_logits = kw_model(CN_hopk_edge_index, batch_context_keywords,
+                             x_utter=batch_context,
+                             x_concept=batch_context_concepts)  # (batch_size, keyword_vocab_size)
+
+        if keyword_mask_matrix is not None:
+            batch_vocab_mask = keyword_mask_matrix[batch_context_keywords].sum(dim=1).clamp(min=0,
+                                                                                            max=1)  # (batch_size, keyword_vocab_size)
+            kw_logits = (1 - batch_vocab_mask) * (
+                -5e4) + batch_vocab_mask * kw_logits  # (batch, vocab_size), masked logits
+
+    # top_kws = kw_logits.topk(3, dim=-1)[1]
+    # (batch_size, 3), need to convert to vocab token id based on word2id
+    return kw_logits
+
+
+def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax):
+    neighbors = kw_mask_matrix[context_kws.cpu()].sum(dim=1).clamp(min=0, max=1)  # (keyword_vocab_size)
+    # kw_logits: (vocab, )
+    num_neighbors = neighbors.sum(1).long()
+    has_neighbors = num_neighbors.clamp(0, 1).unsqueeze(1).expand(-1, kw_logits.size(-1))
+    neighbor_filter = kw_logits * ((1 - has_neighbors) + neighbors)
+    return softmax(neighbor_filter)
+
+
+def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax):
+    logits = (kw_graph_distance_matrix * (persona_kws.unsqueeze(1))).mean(-1).reciprocal()
+    return softmax(logits)
+
+
 def hybrid_kw_and_lm_probs(gate, lm_mask, kw_probs, lm_probs):
     # for gate only optimize examples with keywords in the response
     hybrid_probs = lm_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(
@@ -45,14 +104,6 @@ def kw_word_map(dict, device):
     return torch.tensor(map).to(device)
 
 
-## gate
-def gate(hidden_states):
-    sigmoid = nn.Sigmoid()
-    gate_linear = nn.Linear(hidden_states.shape[-1], 1)
-    gate = sigmoid(gate_linear(hidden_states))
-    return gate
-
-
 def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
     if use_keywords:
         kw_model = load_kw_prediction_path.split("/")[-1][:-3]  # keyword prediction model name
@@ -70,28 +121,6 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
         # pipline, no training required
         kw_model.eval()
         return kw_model.to(device)
-
-
-## kw model forward
-def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
-    batch_context = inputs_for_kw_model['batch_context']
-    batch_context_keywords = inputs_for_kw_model['batch_context_keywords']
-    batch_context_concepts = inputs_for_kw_model['batch_context_concepts']
-    CN_hopk_edge_index = inputs_for_kw_model['CN_hopk_edge_index']
-    with torch.no_grad():
-        kw_logits = kw_model(CN_hopk_edge_index, batch_context_keywords,
-                             x_utter=batch_context,
-                             x_concept=batch_context_concepts)  # (batch_size, keyword_vocab_size)
-
-        if keyword_mask_matrix is not None:
-            batch_vocab_mask = keyword_mask_matrix[batch_context_keywords].sum(dim=1).clamp(min=0,
-                                                                                            max=1)  # (batch_size, keyword_vocab_size)
-            kw_logits = (1 - batch_vocab_mask) * (
-                -5e4) + batch_vocab_mask * kw_logits  # (batch, vocab_size), masked logits
-
-    # top_kws = kw_logits.topk(3, dim=-1)[1]
-    # (batch_size, 3), need to convert to vocab token id based on word2id
-    return kw_logits
 
 
 ## one example for kw model
@@ -250,3 +279,8 @@ def to_basic_form(tokens):
     else:
         return word
     return _lemmatizer.lemmatize(word, pos)
+
+
+def load_pickle(path):
+    with open(path, "rb") as f:
+        return pickle.load(f)

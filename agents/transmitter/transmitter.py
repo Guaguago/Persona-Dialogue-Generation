@@ -29,8 +29,10 @@ from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
-from idea import inputs_for_KW_model, inputs_for_gate_module, prepare_inputs_for_kw_model, cal_kw_logits, kw_word_map
-from idea import hybrid_kw_and_lm_probs, get_keyword_mask_matrix, load_kw_model
+from idea import inputs_for_KW_model, inputs_for_gate_module, prepare_inputs_for_kw_model, kw_word_map
+from idea import get_keyword_mask_matrix, load_kw_model, get_kw_graph_distance_matrix
+from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs, hybrid_kw_and_lm_probs
+from idea import get_persona_kws, prepare_batch_persona_kw_mask
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
@@ -337,7 +339,8 @@ class TransformerAgent(Agent):
             # self.kw_model = load_kw_model('/apdcephfs/private_chencxu/p2/saved_model/convai2/KW_GNN_Commonsense.pt', self.device)
             # self.kw_model = load_kw_model('saved_model/convai2/KW_GNN_Commonsense.pt', self.device)
             self.vocab_map = kw_word_map(self.dict, self.device)
-            self.keyword_mask_matrix = get_keyword_mask_matrix(self.device)
+            self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
+            self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(self.device)
 
             self.id = 'Transformer'
             # we use START markers to start our output
@@ -613,11 +616,13 @@ class TransformerAgent(Agent):
         shared['opt'] = self.opt
         shared['answers'] = self.answers
         shared['dict'] = self.dict
+
         # idea interface
         shared['device'] = self.device
         shared['kw_model'] = self.kw_model
         shared['vocab_map'] = self.vocab_map
-        shared['keyword_mask_matrix'] = self.keyword_mask_matrix
+        shared['keyword_mask_matrix'] = self.kw_mask_matrix
+        shared['kw_graph_distance_matrix'] = self.kw_graph_distance_matrix
 
         shared['START_IDX'] = self.START_IDX
         shared['END_IDX'] = self.END_IDX
@@ -664,6 +669,7 @@ class TransformerAgent(Agent):
                 obs['persona'] = persona_given
 
                 # idea interface
+                obs['persona_ground'] = get_persona_kws(persona_given)
                 obs['kw_model'] = inputs_for_KW_model(self.history, text_split[-1], self.dict)
 
             obs['text2vec'], obs['dis2vec'], obs['turn2vec'], obs['cur_turn'] = maintain_dialog_history(
@@ -697,10 +703,16 @@ class TransformerAgent(Agent):
         predictions, cand_preds = None, None
 
         # idea interface: for both train and generation codes.
+        softmax = nn.Softmax(dim=-1)
         for_kw_model = idea_interface['for_kw_model']
-        kw_logits = None
+        persona_kw_mask = idea_interface['persona_kw_mask']
+        kw_probs = None
         if for_kw_model:
-            kw_logits = cal_kw_logits(for_kw_model, self.keyword_mask_matrix, self.kw_model)
+            kw_logits = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.kw_model)
+            walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
+                                        for_kw_model['batch_context_keywords'], softmax)
+            jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)
+            kw_probs = 0.5 * softmax(kw_logits) + 0.2 * walk_probs + 0.3 * jump_probs
 
         if is_training:
             self.model.train()
@@ -733,7 +745,6 @@ class TransformerAgent(Agent):
                 neg_label = torch.tensor([0] * negative_score.size(0), device=positive_score.device)
 
                 ### idea interface ###
-                softmax = nn.Softmax(dim=-1)
                 lm_probs = softmax(scores)
                 for_gate = idea_interface['for_gate_module']
                 lm_mask = for_gate['lm_mask']
@@ -741,7 +752,7 @@ class TransformerAgent(Agent):
                 gate_mask = for_gate['gate_mask']
                 gate = out[-3]
 
-                expanded_kw_logits = kw_logits.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
+                expanded_kw_logits = kw_probs.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
                 kw_probs = softmax(
                     expanded_kw_logits.gather(-1, self.vocab_map.unsqueeze(0).unsqueeze(1).expand(lm_probs.size())))
 
@@ -759,7 +770,7 @@ class TransformerAgent(Agent):
                 gen_loss = gen_loss_fn(hybrid_probs_clamp.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
                 class_loss = (self.class_criter(positive_score, pos_label) + self.class_criter(negative_score,
                                                                                                neg_label)) / 2
-                loss = 0.5 * gen_loss + 0.25 * class_loss + 0.25 * gate_loss
+                loss = 0.2 * gen_loss + 0.3 * class_loss + 0.5 * gate_loss
                 # idea interface: drop
                 # gen_loss = self.criterion(scores, tgt_seq) / target_tokens
 
@@ -794,7 +805,7 @@ class TransformerAgent(Agent):
                                      rank_during_training=cands is not None,
                                      cands=cands,
                                      valid_cands=valid_cands,
-                                     kw_logits=kw_logits,
+                                     kw_logits=kw_probs,
                                      vocab_map=self.vocab_map)
             predictions, cand_preds = out[0], out[2]
 
@@ -934,11 +945,13 @@ class TransformerAgent(Agent):
             observations)
 
         # idea interface
+        persona_kw_mask = prepare_batch_persona_kw_mask(observations, device=self.device)
         data_for_kw_model = prepare_inputs_for_kw_model(observations, device=self.device)
         data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map)
         idea_dict = {
             'for_kw_model': data_for_kw_model,
-            'for_gate_module': data_for_gate
+            'for_gate_module': data_for_gate,
+            'persona_kw_mask': persona_kw_mask
         }
 
         if src_seq is None:
