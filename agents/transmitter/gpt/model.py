@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
-from idea import gate
 import os
 
 
