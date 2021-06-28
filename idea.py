@@ -34,10 +34,9 @@ def prepare_batch_persona_kw_mask(obs, device):
     return batch_persona_kws_mask
 
 
-def get_kw_graph_distance_matrix(device):
+def get_kw_graph_distance_matrix(path, device):
     kw_graph_distance_matrix = np.ones((len(keyword2id), len(keyword2id))) * 1000
-    kw_graph_distance_dict = load_pickle(
-        "/Users/xuchen/core/pycharm/project/Persona-Dialogue-Generation/data/ConceptNet/keyword_graph_weighted_distance_dict.pkl")
+    kw_graph_distance_dict = load_pickle(path)
     for node1, node2 in kw_graph_distance_dict.keys():
         kw_graph_distance_matrix[keyword2id[node1], keyword2id[node2]] = kw_graph_distance_dict[(node1, node2)]
 
