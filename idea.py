@@ -67,7 +67,7 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
 
 
 def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax):
-    neighbors = kw_mask_matrix[context_kws.cpu()].sum(dim=1).clamp(min=0, max=1)  # (keyword_vocab_size)
+    neighbors = kw_mask_matrix[context_kws].sum(dim=1).clamp(min=0, max=1)  # (keyword_vocab_size)
     # kw_logits: (vocab, )
     num_neighbors = neighbors.sum(1).long()
     has_neighbors = num_neighbors.clamp(0, 1).unsqueeze(1).expand(-1, kw_logits.size(-1))
