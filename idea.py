@@ -30,10 +30,8 @@ def get_persona_kws(history, persona_str):
 
 
 def prepare_batch_persona_kw_mask(obs, device):
-
-
     batch_persona_kws = torch.tensor([o['persona_kws'] for o in obs if len(o['text2vec']) > 0]).to(device)
-    mask = torch.zeros(len(keyword2id)).to(device).unsqueeze(0).expand(len(obs), -1)
+    mask = torch.zeros(len(keyword2id)).to(device).unsqueeze(0).expand(len(batch_persona_kws), -1)
     batch_persona_kws_mask = mask.scatter(dim=1, index=batch_persona_kws, src=torch.ones_like(mask))
     batch_persona_kws_mask[:, 0:2] = 0
     return batch_persona_kws_mask
