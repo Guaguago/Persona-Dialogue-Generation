@@ -340,7 +340,7 @@ class TransformerAgent(Agent):
             # self.kw_model = load_kw_model('saved_model/convai2/KW_GNN_Commonsense.pt', self.device)
             self.vocab_map = kw_word_map(self.dict, self.device)
             self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
-            self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(self.device)
+            self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(self.opt['datapath']+'/ConceptNet/keyword_graph_weighted_distance_dict.pkl', self.device)
 
             self.id = 'Transformer'
             # we use START markers to start our output
@@ -941,6 +941,7 @@ class TransformerAgent(Agent):
         # valid_inds tells us the indices of all valid examples
         # e.g. for input [{}, {'text': 'hello'}, {}, {}], valid_inds is [1]
         # since the other three elements had no 'text' field
+
         src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn, labels, valid_inds, cands, valid_cands, sampling_cands, is_training = self.vectorize(
             observations)
 
