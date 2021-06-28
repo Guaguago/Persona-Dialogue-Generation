@@ -22,12 +22,17 @@ keyword2id, id2keyword, node2id, word2id, CN_hopk_graph_dict = pkl_list
 
 
 # idea interface
-def get_persona_kws(persona_str):
-    return extract_keywords(persona_str, keyword2id, 30)
+def get_persona_kws(history, persona_str):
+    if history:
+        return history['persona_kws']
+    else:
+        return extract_keywords(persona_str, keyword2id, 30)
 
 
 def prepare_batch_persona_kw_mask(obs, device):
-    batch_persona_kws = torch.tensor([o['persona_ground'] for o in obs if len(o['text2vec']) > 0]).to(device)
+
+
+    batch_persona_kws = torch.tensor([o['persona_kws'] for o in obs if len(o['text2vec']) > 0]).to(device)
     mask = torch.zeros(len(keyword2id)).to(device).unsqueeze(0).expand(len(obs), -1)
     batch_persona_kws_mask = mask.scatter(dim=1, index=batch_persona_kws, src=torch.ones_like(mask))
     batch_persona_kws_mask[:, 0:2] = 0
@@ -76,7 +81,9 @@ def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax):
 
 
 def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax):
-    logits = (kw_graph_distance_matrix * (persona_kws.unsqueeze(1))).mean(-1).reciprocal()
+    has_persona_kws = persona_kws.sum(-1).clamp(0, 1).unsqueeze(1).expand(-1, len(keyword2id))
+    mean_dist = (kw_graph_distance_matrix * (persona_kws.unsqueeze(1))).mean(-1)
+    logits = (mean_dist + (1 - has_persona_kws)).reciprocal()
     return softmax(logits)
 
 

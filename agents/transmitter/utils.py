@@ -336,11 +336,16 @@ def maintain_dialog_history(history, observation, reply='', persona_append_strat
 
     # first append, then not
     if len(history['dialog']) == 0 and 'persona' in observation and observation['persona'] != '':
+
+        # idea interface
+        history['persona_kws'] = observation['persona_kws']
+
         if persona_append_strategy == 'concat':
             split_persona = observation['persona'].split('\n')
             if shuffle_persona:
                 shuffle(split_persona)
             persona_text = ' '.join(split_persona)
+
             if use_persona_tokens:
                 persona_text = SpecialToken.persona_start + ' ' + persona_text + ' ' + SpecialToken.persona_end
             parse_vec = parse(persona_text, split_sentence)
@@ -377,7 +382,7 @@ def maintain_dialog_history(history, observation, reply='', persona_append_strat
             # 0.5 is a great one?
             mat_select = score_mat.view(-1) > 0.5
             # select the persona which is 1
-            persona_text = ' ' .join([split_persona[ind] for ind in range(len(split_persona)) if 1 == mat_select[ind]])
+            persona_text = ' '.join([split_persona[ind] for ind in range(len(split_persona)) if 1 == mat_select[ind]])
             if persona_text == '':
                 persona_text = SpecialToken.no_fact
             if use_persona_tokens:

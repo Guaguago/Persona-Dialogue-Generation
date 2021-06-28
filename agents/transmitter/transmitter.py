@@ -340,7 +340,8 @@ class TransformerAgent(Agent):
             # self.kw_model = load_kw_model('saved_model/convai2/KW_GNN_Commonsense.pt', self.device)
             self.vocab_map = kw_word_map(self.dict, self.device)
             self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
-            self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(self.opt['datapath']+'/ConceptNet/keyword_graph_weighted_distance_dict.pkl', self.device)
+            self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(
+                self.opt['datapath'] + '/ConceptNet/keyword_graph_weighted_distance_dict.pkl', self.device)
 
             self.id = 'Transformer'
             # we use START markers to start our output
@@ -669,7 +670,7 @@ class TransformerAgent(Agent):
                 obs['persona'] = persona_given
 
                 # idea interface
-                obs['persona_ground'] = get_persona_kws(persona_given)
+                obs['persona_kws'] = get_persona_kws(self.history, persona_given)
                 obs['kw_model'] = inputs_for_KW_model(self.history, text_split[-1], self.dict)
 
             obs['text2vec'], obs['dis2vec'], obs['turn2vec'], obs['cur_turn'] = maintain_dialog_history(
