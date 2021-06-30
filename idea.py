@@ -80,7 +80,7 @@ def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax):
 
 def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax):
     has_persona_kws = persona_kws.sum(-1).clamp(0, 1).unsqueeze(1).expand(-1, len(keyword2id))
-    mean_dist = (kw_graph_distance_matrix * (persona_kws.unsqueeze(1))).min(-1)
+    mean_dist = (kw_graph_distance_matrix * (persona_kws.unsqueeze(1))).min(dim=-1)[0]
     logits = (mean_dist + (1 - has_persona_kws)).reciprocal()
     return softmax(logits)
 
