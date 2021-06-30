@@ -713,7 +713,7 @@ class TransformerAgent(Agent):
             walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
                                         for_kw_model['batch_context_keywords'], softmax)
             jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)
-            kw_probs = 0.5 * softmax(kw_logits) + 0.2 * walk_probs + 0.3 * jump_probs
+            kw_probs = 0.3 * softmax(kw_logits) + 0.5 * walk_probs + 0.2 * jump_probs
 
         if is_training:
             self.model.train()
