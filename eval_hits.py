@@ -14,8 +14,10 @@ def setup_task():
 def setup_trained_weights():
     if IS_ORIGINAL:
         weights_name = '/apdcephfs/share_916081/chencxu/p2/tmp/transmitter/transmitter_original.model'
+        # weights_name = './tmp/transmitter/transmitter_original.model'
     else:
-        weights_name = '/apdcephfs/share_916081/chencxu/p2/tmp/psquare/psqaure_revised.model'
+        weights_name = '/apdcephfs/share_916081/chencxu/p2/tmp/transmitter/transmitter_revised.model'
+        # weights_name = './tmp/psquare/psqaure_revised.model'
     return weights_name
 
 
