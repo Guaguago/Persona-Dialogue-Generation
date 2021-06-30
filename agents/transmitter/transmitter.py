@@ -755,7 +755,7 @@ class TransformerAgent(Agent):
 
                 expanded_kw_logits = kw_probs.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
                 kw_probs = softmax(
-                    expanded_kw_logits.gather(-1, self.vocab_map.unsqueeze(0).unsqueeze(1).expand(lm_probs.size())))
+                    expanded_kw_logits.gather(-1, self.vocab_map.unsqueeze(0).unsqueeze(1).expand(lm_probs.size()))/0.01)
 
                 hybrid_probs = hybrid_kw_and_lm_probs(
                     gate=gate,
