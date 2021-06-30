@@ -22,7 +22,7 @@ keyword2id, id2keyword, node2id, word2id, CN_hopk_graph_dict = pkl_list
 
 
 # idea interface
-def get_persona_kws(history, persona_str):
+def prepare_example_persona_kws(history, persona_str):
     if history:
         return history['persona_kws']
     else:
@@ -80,7 +80,7 @@ def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax):
 
 def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax):
     has_persona_kws = persona_kws.sum(-1).clamp(0, 1).unsqueeze(1).expand(-1, len(keyword2id))
-    mean_dist = (kw_graph_distance_matrix * (persona_kws.unsqueeze(1))).mean(-1)
+    mean_dist = (kw_graph_distance_matrix * (persona_kws.unsqueeze(1))).min(-1)
     logits = (mean_dist + (1 - has_persona_kws)).reciprocal()
     return softmax(logits)
 
@@ -128,7 +128,7 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
 
 
 ## one example for kw model
-def inputs_for_KW_model(history, text, dict):
+def prepare_example_for_kw_model(history, text, dict):
     context, last_two_utters = process_context(history, text, dict)
     last_two_utters_keywords = extract_keywords(context, keyword2id, 20)
     last_two_utters_concepts = extract_concepts(context, node2id, 30, dict)
@@ -136,7 +136,7 @@ def inputs_for_KW_model(history, text, dict):
 
 
 ## one batch for kw model
-def prepare_inputs_for_kw_model(obs, device):
+def prepare_batch_for_kw_model(obs, device):
     inputs_for_kw_model = {}
 
     for_kw_models = [x['kw_model'] for x in obs if len(x['text2vec']) > 0]

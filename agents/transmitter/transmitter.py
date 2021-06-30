@@ -29,10 +29,10 @@ from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
-from idea import inputs_for_KW_model, inputs_for_gate_module, prepare_inputs_for_kw_model, kw_word_map
+from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, kw_word_map
 from idea import get_keyword_mask_matrix, load_kw_model, get_kw_graph_distance_matrix
 from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs, hybrid_kw_and_lm_probs
-from idea import get_persona_kws, prepare_batch_persona_kw_mask
+from idea import prepare_example_persona_kws, prepare_batch_persona_kw_mask
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
@@ -670,8 +670,8 @@ class TransformerAgent(Agent):
                 obs['persona'] = persona_given
 
                 # idea interface
-                obs['persona_kws'] = get_persona_kws(self.history, persona_given)
-                obs['kw_model'] = inputs_for_KW_model(self.history, text_split[-1], self.dict)
+                obs['persona_kws'] = prepare_example_persona_kws(self.history, persona_given)
+                obs['kw_model'] = prepare_example_for_kw_model(self.history, text_split[-1], self.dict)
 
             obs['text2vec'], obs['dis2vec'], obs['turn2vec'], obs['cur_turn'] = maintain_dialog_history(
                 self.history, obs,
@@ -948,7 +948,7 @@ class TransformerAgent(Agent):
 
         # idea interface
         persona_kw_mask = prepare_batch_persona_kw_mask(observations, device=self.device)
-        data_for_kw_model = prepare_inputs_for_kw_model(observations, device=self.device)
+        data_for_kw_model = prepare_batch_for_kw_model(observations, device=self.device)
         data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map)
         idea_dict = {
             'for_kw_model': data_for_kw_model,
