@@ -730,7 +730,9 @@ class TransformerAgent(Agent):
                                          rank_during_training=False,
                                          cands=cands,
                                          sampling_cands=sampling_cands,
-                                         valid_cands=valid_cands)
+                                         valid_cands=valid_cands,
+                                         kw_logits=kw_probs,
+                                         vocab_map=self.vocab_map)
                 # generated response
                 _preds, scores, cand_preds = out[0], out[1], out[2]
                 positive_score, negative_score = out[-2], out[-1]
@@ -741,7 +743,7 @@ class TransformerAgent(Agent):
 
                 y_ne = tgt_seq.ne(self.NULL_IDX)
                 target_tokens = y_ne.long().sum().item()
-                correct = ((tgt_seq == _preds) * y_ne).sum().item()
+                correct = ((tgt_seq == _preds.argmax(dim=-1)) * y_ne).sum().item()
                 pos_label = torch.tensor([1] * positive_score.size(0), device=positive_score.device)
                 neg_label = torch.tensor([0] * negative_score.size(0), device=positive_score.device)
 
@@ -752,10 +754,11 @@ class TransformerAgent(Agent):
                 gate_label = for_gate['gate_label']
                 gate_mask = for_gate['gate_mask']
                 gate = out[-3]
-
+                temperature = 0.01
                 expanded_kw_logits = kw_probs.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
                 kw_probs = softmax(
-                    expanded_kw_logits.gather(-1, self.vocab_map.unsqueeze(0).unsqueeze(1).expand(lm_probs.size()))/0.01)
+                    expanded_kw_logits.gather(-1, self.vocab_map.unsqueeze(0).unsqueeze(1).expand(
+                        lm_probs.size())) / temperature)
 
                 hybrid_probs = hybrid_kw_and_lm_probs(
                     gate=gate,
@@ -771,7 +774,7 @@ class TransformerAgent(Agent):
                 gen_loss = gen_loss_fn(hybrid_probs_clamp.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
                 class_loss = (self.class_criter(positive_score, pos_label) + self.class_criter(negative_score,
                                                                                                neg_label)) / 2
-                loss = 0.7 * gen_loss + 0.4 * class_loss + 0.4 * gate_loss
+                loss = 0.5 * gen_loss + 0.4 * class_loss + 0.3 * gate_loss
                 # idea interface: drop
                 # gen_loss = self.criterion(scores, tgt_seq) / target_tokens
 
@@ -782,7 +785,8 @@ class TransformerAgent(Agent):
 
                 # save loss to metrics
                 self.metrics['correct_tokens'] += correct
-                self.metrics['loss'] += gen_loss.item()
+                # self.metrics['loss'] += gen_loss.item()
+                self.metrics['loss'] += loss.item()
                 self.metrics['num_tokens'] += 1
                 self.metrics['correct_pred'] += rank_correct.item()
                 self.metrics['pred_count'] += positive_score.size(0) * 2
@@ -818,11 +822,23 @@ class TransformerAgent(Agent):
                                          tgt_seq=tgt_seq,
                                          tgt_seq_turn=tgt_seq_turn,
                                          cands=cands,
-                                         valid_cands=valid_cands)
+                                         valid_cands=valid_cands,
+                                         kw_logits=kw_probs,
+                                         vocab_map=self.vocab_map
+                                         )
                 scores = out[1]
                 # just used to calculate perplexity
+
+                #idea
+                pred = out[0]
+                hybrid_probs_clamp = pred.clamp(min=1e-5)
                 with torch.no_grad():
-                    loss = self.eval_criterion(scores, tgt_seq)
+                    gen_loss_fn = nn.NLLLoss(ignore_index=-1, reduction='mean')
+                    gen_loss = gen_loss_fn(hybrid_probs_clamp.log().view(-1, pred.size(-1)), tgt_seq.view(-1))
+                    loss = torch.exp(gen_loss)
+
+                # with torch.no_grad():
+                #     loss = self.eval_criterion(scores, tgt_seq)
                 # save loss to metrics
                 target_tokens = tgt_seq.ne(self.NULL_IDX).long().sum().item()
                 self.metrics['loss'] += loss.item()

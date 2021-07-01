@@ -37,7 +37,7 @@ def setup_seed(seed=1706123):
 
 
 def gpt_setting():
-    return 10, 1e-4, 'gpt_custom', 1.0
+    return 24, 1e-4, 'gpt_custom', 1.0
 
 
 def lstm_setting():
