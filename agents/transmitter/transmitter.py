@@ -707,13 +707,14 @@ class TransformerAgent(Agent):
         softmax = nn.Softmax(dim=-1)
         for_kw_model = idea_interface['for_kw_model']
         persona_kw_mask = idea_interface['persona_kw_mask']
-        kw_probs = None
-        if for_kw_model:
-            kw_logits = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.kw_model)
-            walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
-                                        for_kw_model['batch_context_keywords'], softmax)
-            jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)
-            kw_probs = 0.1 * softmax(kw_logits) + 0.7 * walk_probs + 0.2 * jump_probs
+
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!{}".format(for_kw_model))
+
+        kw_logits = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.kw_model)
+        walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
+                                    for_kw_model['batch_context_keywords'], softmax)
+        jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)
+        kw_probs = 0.1 * softmax(kw_logits) + 0.7 * walk_probs + 0.2 * jump_probs
 
         if is_training:
             self.model.train()
@@ -794,6 +795,8 @@ class TransformerAgent(Agent):
                 self.metrics['pred_count'] += positive_score.size(0) * 2
                 loss.backward()
             except RuntimeError as e:
+                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!{}".format(e))
+
                 # catch out of memory exceptions during fwd/bck (skip batch)
                 if 'out of memory' in str(e):
                     print('| WARNING: ran out of memory, skipping batch. '
