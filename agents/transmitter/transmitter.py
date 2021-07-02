@@ -801,6 +801,7 @@ class TransformerAgent(Agent):
             self.update_params()
         else:
             self.model.eval()
+            gate = None
             out = self.model.forward(src_seq=src_seq,
                                      src_seq_turn=src_seq_turn,
                                      src_seq_dis=src_seq_dis,
@@ -809,7 +810,7 @@ class TransformerAgent(Agent):
                                      valid_cands=valid_cands,
                                      kw_logits=kw_probs,
                                      vocab_map=self.vocab_map)
-            predictions, cand_preds = out[0], out[2]
+            predictions, cand_preds, gate = out[0], out[2], out[3]  # 生成example过程
 
             if tgt_seq is not None:
                 # calculate loss on targets

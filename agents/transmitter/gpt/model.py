@@ -76,6 +76,7 @@ class Gpt2SeqModel(nn.Module):
 
         # evaluation return none scores
         scores = None
+        gate = None
 
         negative_score = None
         start_tensor = self.start_tensor.detach().expand(batch_size, 1)
@@ -138,13 +139,11 @@ class Gpt2SeqModel(nn.Module):
                 predictions, scores, hidden_states = self.train_greedy_decoding(batch_size, prior_context, prior_dis)
             elif self.beam_size > 1:
                 # idea interface: modified
-                predictions, hidden_states, gate = self.beam_search(batch_size, prior_context, self.gate_linear,
-                                                                    kw_logits,
-                                                                    vocab_map)
+                predictions, hidden_states, gate = self.beam_search(batch_size, prior_context, kw_logits, vocab_map)
 
             else:
-                predictions, hidden_states, gate = self.greedy_decoding(batch_size, prior_context, prior_dis,
-                                                                        self.gate_linear, kw_logits, vocab_map)
+                predictions, hidden_states, gate = self.greedy_decoding(batch_size, prior_context, prior_dis, kw_logits,
+                                                                        vocab_map)
 
             positive_score = self.linear(hidden_states[:, -1, :])
 
@@ -209,7 +208,7 @@ class Gpt2SeqModel(nn.Module):
     def _length_penalty(self, sequence_lengths):
         return sequence_lengths
 
-    def greedy_decoding(self, batch_size, prior_context, prior_dis, gate_linear, kw_logits, vocab_map):
+    def greedy_decoding(self, batch_size, prior_context, prior_dis, kw_logits, vocab_map):
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
         is_end = torch.zeros(batch_size, dtype=torch.uint8, device=device)
@@ -228,7 +227,7 @@ class Gpt2SeqModel(nn.Module):
                 softmax = nn.Softmax(dim=-1)
                 sigmoid = nn.Sigmoid()
                 lm_probs = softmax(logits)
-                gate = sigmoid(gate_linear(hidden_states[:, -1, :]))
+                gate = sigmoid(self.gate_linear(hidden_states[:, -1, :]))
                 kw_probs = softmax(kw_logits.gather(-1, vocab_map.unsqueeze(0).expand(batch_size, -1)) / 0.01)
                 hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
                 log_probs = torch.log(hybrid_probs)
@@ -417,7 +416,7 @@ class Gpt2SeqModel(nn.Module):
         pred_output = pred_output[..., :score_output.shape[1]].contiguous()
         return pred_output, score_output, hidden_states
 
-    def beam_search(self, batch_size, prior_context, gate_linear, kw_logits, vocab_map):
+    def beam_search(self, batch_size, prior_context, kw_logits, vocab_map):
         """
         beam search for the validating generation. Note we also impose the n-gram repeating, which is borrowed
         from https://github.com/pytorch/fairseq. The diversity is not useful here.
@@ -451,7 +450,7 @@ class Gpt2SeqModel(nn.Module):
                 if kw_logits != None:
                     kw_logits_beam = kw_logits.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
                     sigmoid = nn.Sigmoid()
-                    gate = sigmoid(gate_linear(hidden_states[:, -1, :]))
+                    gate = sigmoid(self.gate_linear(hidden_states[:, -1, :]))
                     vocab_map_tensor = vocab_map.unsqueeze(0).expand(batch_size * self.beam_size, -1)
                     kw_probs = softmax(kw_logits_beam.gather(-1, vocab_map_tensor) / 0.01)
                     hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
