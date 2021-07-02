@@ -17,7 +17,7 @@ from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 IS_ORIGINAL = True
 
 # TRANSMITTER_DIR = './tmp/transmitter'
-TRANSMITTER_DIR = '/apdcephfs/share_916081/chencxu/p2/tmp/transmitter'
+TRANSMITTER_DIR = '/apdcephfs/share_916081/chencxu/pegg/tmp/transmitter'
 VERSION = "transmitter_original"
 
 
@@ -85,10 +85,11 @@ def setup_args():
         rank_candidates=False,
         # task='tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands',
         model='agents.transmitter.transmitter:TransformerAgent',
-        # model_file='./tmp/transmitter/{}.model'.format(exp_name),
 
-        datapath='/apdcephfs/share_916081/chencxu/p2/data',
-        model_file='/apdcephfs/share_916081/chencxu/p2/tmp/transmitter/{}.model'.format(exp_name),
+        datapath='/apdcephfs/share_916081/chencxu/pegg/data',
+        model_file='/apdcephfs/share_916081/chencxu/pegg/tmp/transmitter/{}.model'.format(exp_name),
+        # datapath='./data',
+        # model_file='./tmp/transmitter/{}.model'.format(exp_name),
 
         dict_tokenizer='split',
         datatype='train',
