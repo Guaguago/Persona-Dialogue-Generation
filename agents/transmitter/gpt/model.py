@@ -32,6 +32,8 @@ class Gpt2SeqModel(nn.Module):
                                                                        num_special_tokens=special_token_len)
         # idea interface
         self.gate_linear = nn.Linear(768, 1)
+        self.softmax = nn.Softmax(dim=-1)
+        self.sigmoid = nn.Sigmoid()
 
         self.pad_idx = pad_idx
         self.start_idx = start_idx
@@ -75,9 +77,8 @@ class Gpt2SeqModel(nn.Module):
             src_seq_dis = np.array(src_seq_dis)
 
         # evaluation return none scores
-        scores = None
-        gate = None
 
+        scores = None
         negative_score = None
         start_tensor = self.start_tensor.detach().expand(batch_size, 1)
         # whether training or evaluation
@@ -101,12 +102,10 @@ class Gpt2SeqModel(nn.Module):
 
             lm_logits, hidden_states = self.transformer_module(input_seq, None, dis_seq)
 
-            # idea interface
-            sigmoid = nn.Sigmoid()
-            gate = sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :])).contiguous()
-
             # lm labels should mask the source sentence language model
             shift_logits = lm_logits[..., src_seq_len:-1, :].contiguous()
+            gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
+
             # lm_labels = tgt_seq.clone()[..., 1:].contiguous()
             # predict answers
             scores = shift_logits
@@ -135,15 +134,22 @@ class Gpt2SeqModel(nn.Module):
             if sampling:
                 predictions, scores, hidden_states = self.sample_decoding(batch_size, prior_context, prior_dis,
                                                                           self.topk)
+                gate = self.sigmoid(self.gate_linear(hidden_states))
+
             elif self.training:
                 predictions, scores, hidden_states = self.train_greedy_decoding(batch_size, prior_context, prior_dis)
+                gate = self.sigmoid(self.gate_linear(hidden_states))
             elif self.beam_size > 1:
                 # idea interface: modified
-                predictions, hidden_states, gate = self.beam_search(batch_size, prior_context, kw_logits, vocab_map)
+                predictions, hidden_states = self.beam_search(batch_size, prior_context, kw_logits,
+                                                              vocab_map)
+                gate = self.sigmoid(self.gate_linear(hidden_states))
+
 
             else:
-                predictions, hidden_states, gate = self.greedy_decoding(batch_size, prior_context, prior_dis, kw_logits,
-                                                                        vocab_map)
+                predictions, hidden_states = self.greedy_decoding(batch_size, prior_context, prior_dis, kw_logits,
+                                                                  vocab_map)
+                gate = self.sigmoid(self.gate_linear(hidden_states))
 
             positive_score = self.linear(hidden_states[:, -1, :])
 
@@ -273,7 +279,7 @@ class Gpt2SeqModel(nn.Module):
                 is_end = is_end | (predict_tok == self.end_idx).view(-1)
                 if (~is_end).sum() == 0:
                     break
-        return pred_output, hidden_states, gate
+        return pred_output, hidden_states
 
     def train_greedy_decoding(self, batch_size, prior_context, prior_dis):
         """
@@ -567,7 +573,7 @@ class Gpt2SeqModel(nn.Module):
                 best_seq = result[step, bests[step], 1:best_len - 1]
                 predicts.append(best_seq.tolist())
 
-        return predicts, hidden_states, gate
+        return predicts, hidden_states
 
     def score_sentence(self, receive_tokens, send_tokens):
         """

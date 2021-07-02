@@ -732,7 +732,8 @@ class TransformerAgent(Agent):
                                          sampling_cands=sampling_cands,
                                          valid_cands=valid_cands)
                 # generated response
-                _preds, scores, cand_preds = out[0], out[1], out[2]
+                _preds, scores, cand_preds, gate = out[0], out[1], out[2], out[4]
+
                 positive_score, negative_score = out[-2], out[-1]
 
                 positive_pred = torch.argmax(positive_score, dim=1)
@@ -747,11 +748,11 @@ class TransformerAgent(Agent):
 
                 ### idea interface ###
                 lm_probs = softmax(scores)
+
                 for_gate = idea_interface['for_gate_module']
                 lm_mask = for_gate['lm_mask']
                 gate_label = for_gate['gate_label']
                 gate_mask = for_gate['gate_mask']
-                gate = out[-3]
                 temperature = 0.01
                 expanded_kw_logits = kw_probs.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
                 kw_probs = softmax(
@@ -801,7 +802,6 @@ class TransformerAgent(Agent):
             self.update_params()
         else:
             self.model.eval()
-            gate = None
             out = self.model.forward(src_seq=src_seq,
                                      src_seq_turn=src_seq_turn,
                                      src_seq_dis=src_seq_dis,
@@ -810,7 +810,7 @@ class TransformerAgent(Agent):
                                      valid_cands=valid_cands,
                                      kw_logits=kw_probs,
                                      vocab_map=self.vocab_map)
-            predictions, cand_preds, gate = out[0], out[2], out[3]  # 生成example过程
+            predictions, cand_preds = out[0], out[2]  # 生成example过程
 
             if tgt_seq is not None:
                 # calculate loss on targets
@@ -820,8 +820,19 @@ class TransformerAgent(Agent):
                                          tgt_seq=tgt_seq,
                                          tgt_seq_turn=tgt_seq_turn,
                                          cands=cands,
-                                         valid_cands=valid_cands)
-                scores = out[1]
+                                         valid_cands=valid_cands,
+                                         kw_logits=kw_probs,
+                                         vocab_map=self.vocab_map)
+
+                scores, gate = out[1], out[4]
+                lm_probs = softmax(scores)
+                temperature = 0.01
+                expanded_kw_logits = kw_probs.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
+                kw_probs = softmax(
+                    expanded_kw_logits.gather(-1, self.vocab_map.unsqueeze(0).unsqueeze(1).expand(
+                        lm_probs.size())) / temperature)
+                hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
+
                 # just used to calculate perplexity
                 with torch.no_grad():
                     loss = self.eval_criterion(scores, tgt_seq)
