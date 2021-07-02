@@ -832,13 +832,17 @@ class TransformerAgent(Agent):
                     expanded_kw_logits.gather(-1, self.vocab_map.unsqueeze(0).unsqueeze(1).expand(
                         lm_probs.size())) / temperature)
                 hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
+                hybrid_probs_clamp = hybrid_probs.clamp(min=1e-5)
+                with torch.no_grad():
+                    gen_loss_fn = nn.NLLLoss(ignore_index=-1, reduction='mean')
+                    gen_loss = gen_loss_fn(hybrid_probs_clamp.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
 
                 # just used to calculate perplexity
-                with torch.no_grad():
-                    loss = self.eval_criterion(scores, tgt_seq)
+                # with torch.no_grad():
+                # loss = self.eval_criterion(scores, tgt_seq)
                 # save loss to metrics
                 target_tokens = tgt_seq.ne(self.NULL_IDX).long().sum().item()
-                self.metrics['loss'] += loss.item()
+                self.metrics['loss'] += gen_loss.item()
                 self.metrics['num_tokens'] += target_tokens
 
         return predictions, cand_preds
