@@ -113,22 +113,7 @@ class Gpt2SeqModel(nn.Module):
             pos_seq_len_expand = pos_seq_len.unsqueeze(dim=2).repeat(1, 1, 768)
             last_state = hidden_states.gather(dim=1, index=pos_seq_len_expand).squeeze(dim=1)
             positive_score = self.linear(self.dropout(last_state))
-
-            # idea interface
-            softmax = nn.Softmax(dim=-1)
-            lm_probs = softmax(shift_logits)
-
-            temperature = 0.01
-            expanded_kw_logits = kw_logits.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
-            kw_probs = softmax(
-                expanded_kw_logits.gather(-1, vocab_map.unsqueeze(0).unsqueeze(1).expand(
-                    lm_probs.size())) / temperature)
-
-            hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
-            # hybrid_probs_clamp = hybrid_probs.clamp(min=1e-5)
-            # predictions = hybrid_probs.argmax(dim=-1)
-            # predictions = shift_logits.argmax(dim=-1)
-            predictions = hybrid_probs
+            predictions = shift_logits.argmax(dim=-1)
         else:
             prior_context = torch.cat([src_seq, start_tensor], dim=1)
             if self.use_dis and src_seq_dis is not None:

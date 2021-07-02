@@ -707,14 +707,13 @@ class TransformerAgent(Agent):
         softmax = nn.Softmax(dim=-1)
         for_kw_model = idea_interface['for_kw_model']
         persona_kw_mask = idea_interface['persona_kw_mask']
-
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!{}".format(for_kw_model))
-
-        kw_logits = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.kw_model)
-        walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
-                                    for_kw_model['batch_context_keywords'], softmax)
-        jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)
-        kw_probs = 0.1 * softmax(kw_logits) + 0.7 * walk_probs + 0.2 * jump_probs
+        kw_probs = None
+        if for_kw_model:
+            kw_logits = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.kw_model)
+            walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
+                                        for_kw_model['batch_context_keywords'], softmax)
+            jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)
+            kw_probs = 0.3 * softmax(kw_logits) + 0.5 * walk_probs + 0.2 * jump_probs
 
         if is_training:
             self.model.train()
@@ -731,9 +730,7 @@ class TransformerAgent(Agent):
                                          rank_during_training=False,
                                          cands=cands,
                                          sampling_cands=sampling_cands,
-                                         valid_cands=valid_cands,
-                                         kw_logits=kw_probs,
-                                         vocab_map=self.vocab_map)
+                                         valid_cands=valid_cands)
                 # generated response
                 _preds, scores, cand_preds = out[0], out[1], out[2]
                 positive_score, negative_score = out[-2], out[-1]
@@ -744,7 +741,7 @@ class TransformerAgent(Agent):
 
                 y_ne = tgt_seq.ne(self.NULL_IDX)
                 target_tokens = y_ne.long().sum().item()
-                correct = ((tgt_seq == _preds.argmax(dim=-1)) * y_ne).sum().item()
+                correct = ((tgt_seq == _preds) * y_ne).sum().item()
                 pos_label = torch.tensor([1] * positive_score.size(0), device=positive_score.device)
                 neg_label = torch.tensor([0] * negative_score.size(0), device=positive_score.device)
 
@@ -786,17 +783,12 @@ class TransformerAgent(Agent):
 
                 # save loss to metrics
                 self.metrics['correct_tokens'] += correct
-                # self.metrics['loss'] += gen_loss.item()
-                self.metrics['loss'] += loss.item()
-                # self.metrics['class_loss'] += class_loss.item()
-                # self.metrics['gate_loss'] += gate_loss.item()
+                self.metrics['loss'] += gen_loss.item()
                 self.metrics['num_tokens'] += 1
                 self.metrics['correct_pred'] += rank_correct.item()
                 self.metrics['pred_count'] += positive_score.size(0) * 2
                 loss.backward()
             except RuntimeError as e:
-                print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!{}".format(e))
-
                 # catch out of memory exceptions during fwd/bck (skip batch)
                 if 'out of memory' in str(e):
                     print('| WARNING: ran out of memory, skipping batch. '
@@ -827,23 +819,11 @@ class TransformerAgent(Agent):
                                          tgt_seq=tgt_seq,
                                          tgt_seq_turn=tgt_seq_turn,
                                          cands=cands,
-                                         valid_cands=valid_cands,
-                                         kw_logits=kw_probs,
-                                         vocab_map=self.vocab_map
-                                         )
+                                         valid_cands=valid_cands)
                 scores = out[1]
                 # just used to calculate perplexity
-
-                #idea
-                pred = out[0]
-                hybrid_probs_clamp = pred.clamp(min=1e-5)
                 with torch.no_grad():
-                    gen_loss_fn = nn.NLLLoss(ignore_index=-1, reduction='mean')
-                    gen_loss = gen_loss_fn(hybrid_probs_clamp.log().view(-1, pred.size(-1)), tgt_seq.view(-1))
-                    loss = torch.exp(gen_loss)
-
-                # with torch.no_grad():
-                #     loss = self.eval_criterion(scores, tgt_seq)
+                    loss = self.eval_criterion(scores, tgt_seq)
                 # save loss to metrics
                 target_tokens = tgt_seq.ne(self.NULL_IDX).long().sum().item()
                 self.metrics['loss'] += loss.item()
