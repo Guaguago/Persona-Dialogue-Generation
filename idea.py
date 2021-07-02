@@ -1,7 +1,7 @@
 from nltk.util import ngrams
 import nltk
 
-nltk.data.path.append('/apdcephfs/share_916081/chencxu/p2/data/nltk_data')
+nltk.data.path.append('/apdcephfs/share_916081/chencxu/pegg/data/nltk_data')
 from nltk.stem import WordNetLemmatizer
 import pickle
 import torch
