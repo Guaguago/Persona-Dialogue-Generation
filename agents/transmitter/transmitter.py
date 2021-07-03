@@ -335,13 +335,11 @@ class TransformerAgent(Agent):
 
             # idea interface
             ## load kw model
-            self.kw_model = load_kw_model(
-                '/apdcephfs/share_916081/chencxu/pegg/saved_model/convai2/KW_GNN_Commonsense.pt', self.device)
-            # self.kw_model = load_kw_model('saved_model/convai2/KW_GNN_Commonsense.pt', self.device)
+            self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', self.device)
             self.vocab_map = kw_word_map(self.dict, self.device)
             self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
             self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(
-                self.opt['datapath'] + '/ConceptNet/keyword_graph_weighted_distance_dict.pkl', self.device)
+                self.opt['datapath'] + '/concept_net/keyword_graph_weighted_distance_dict.pkl', self.device)
 
             self.id = 'Transformer'
             # we use START markers to start our output

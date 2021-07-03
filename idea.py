@@ -14,7 +14,7 @@ name_list = ['keyword2id', 'id2keyword', 'node2id', 'word2id', 'CN_hopk_graph_di
 
 pkl_list = []
 for name in name_list:
-    with open('/apdcephfs/share_916081/chencxu/pegg/data/for_kw/{}.pkl'.format(name),
+    with open('/apdcephfs/share_916081/chencxu/pegg/data/kw_model/{}.pkl'.format(name),
               "rb") as f:
         pkl_list.append(pickle.load(f))
 
