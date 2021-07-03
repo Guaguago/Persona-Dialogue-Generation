@@ -762,16 +762,16 @@ class TransformerAgent(Agent):
                     lm_mask=lm_mask,
                     kw_probs=kw_probs,
                     lm_probs=lm_probs)
-                hybrid_probs_clamp = hybrid_probs.clamp(min=1e-5)
+                hybrid_probs_clamp = hybrid_probs.clamp(min=1e-6)
 
                 gate_loss_fn = nn.BCELoss(weight=gate_mask.view(-1), reduction='mean')
                 gate_loss = gate_loss_fn(gate.view(-1), gate_label.view(-1).float())
 
-                gen_loss_fn = nn.NLLLoss(ignore_index=-1, reduction='mean')
+                gen_loss_fn = nn.NLLLoss(ignore_index=0, reduction='mean')
                 gen_loss = gen_loss_fn(hybrid_probs_clamp.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
                 class_loss = (self.class_criter(positive_score, pos_label) + self.class_criter(negative_score,
                                                                                                neg_label)) / 2
-                loss = 0.6 * gen_loss + 0.4 * gate_loss + 0.3 * class_loss
+                loss = gen_loss + gate_loss + class_loss
                 # idea interface: drop
                 # gen_loss = self.criterion(scores, tgt_seq) / target_tokens
 
