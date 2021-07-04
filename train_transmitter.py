@@ -14,11 +14,12 @@ from agents.transmitter.transmitter import ARCH_CHOICE
 from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 
 # if is original, train model on original data; otherwise on revised data.
+NAME = "pegg_o"
 IS_ORIGINAL = True
+WALK, JUMP = 0.2, 0.7
+DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/tmp'
 
-# TRANSMITTER_DIR = './tmp/transmitter'
-TRANSMITTER_DIR = '/apdcephfs/share_916081/chencxu/pegg/tmp/transmitter'
-VERSION = "transmitter_original"
 
 
 def setup_task():
@@ -50,7 +51,7 @@ def setup_args():
     :return: opt
     """
     parser = setup_dict_args()
-    exp_name = VERSION
+    exp_name = NAME
     n_epoches = 100
     beam_size = 2
     encode_layers = 2
@@ -85,14 +86,10 @@ def setup_args():
         rank_candidates=False,
         # task='tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands',
         model='agents.transmitter.transmitter:TransformerAgent',
-
-        datapath='/apdcephfs/share_916081/chencxu/pegg/data',
-        model_file='/apdcephfs/share_916081/chencxu/pegg/tmp/transmitter/{}.model'.format(exp_name),
-        walk_weight=0.2,
-        jump_weight=0.7,
-        # datapath='./data',
-        # model_file='./tmp/transmitter/{}.model'.format(exp_name),
-
+        walk_weight=WALK,
+        jump_weight=JUMP,
+        datapath=DATA_DIR,
+        model_file='{}/transmitter/{}.model'.format(MODEL_DIR, exp_name),
         dict_tokenizer='split',
         datatype='train',
         gpt_lr=6.25e-5,
