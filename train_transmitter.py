@@ -88,6 +88,8 @@ def setup_args():
 
         datapath='/apdcephfs/share_916081/chencxu/pegg/data',
         model_file='/apdcephfs/share_916081/chencxu/pegg/tmp/transmitter/{}.model'.format(exp_name),
+        walk_weight=0.2,
+        jump_weight=0.7,
         # datapath='./data',
         # model_file='./tmp/transmitter/{}.model'.format(exp_name),
 
