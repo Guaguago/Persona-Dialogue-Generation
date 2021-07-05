@@ -13,8 +13,10 @@ from parlai.core.utils import round_sigfigs, no_lock
 from collections import Counter
 
 import re
+import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
 
 try:
     from nltk.translate import bleu_score as nltkbleu
@@ -25,6 +27,7 @@ except ImportError:
 
 re_art = re.compile(r'\b(a|an|the)\b')
 re_punc = re.compile(r'[!"#$%&()*+,-./:;<=>?@\[\]\\^`{|}~_\']')
+_lemmatizer = WordNetLemmatizer()
 
 
 def normalize_answer(s):
@@ -67,7 +70,27 @@ def normalize_answer_content_words(s):
         filtered_sentence = [w for w in word_tokens if not w in stop_words]
         return filtered_sentence
 
-    return white_space_fix(remove_common_words(remove_articles(remove_punc(lower(s)))))
+    def pos_tag(tokens):
+        l = nltk.pos_tag(tokens)
+        return l
+
+    def to_basic_form(tokens):
+
+        if not isinstance(tokens, tuple):
+            return [to_basic_form(token) for token in tokens]
+        word, tag = tokens
+        if tag.startswith('NN'):
+            pos = 'n'
+        elif tag.startswith('VB'):
+            pos = 'v'
+        elif tag.startswith('JJ'):
+            pos = 'a'
+        else:
+            return word
+        return _lemmatizer.lemmatize(word, pos)
+
+
+    return white_space_fix(to_basic_form(pos_tag(remove_common_words(remove_articles(remove_punc(lower(s)))))))
 
 
 def _exact_match(guess, answers):
@@ -337,3 +360,8 @@ class Metrics(object):
             for k in self.eval_pr:
                 self.metrics['hits@' + str(k)] = 0
             self.metrics['hits@_cnt'] = 0
+
+# if __name__ == '__main__':
+#     s = 'I like hunting, he hunts everyday'
+#     o = normalize_answer_content_words(s)
+#     pass
