@@ -14,13 +14,12 @@ from agents.transmitter.transmitter import ARCH_CHOICE
 from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 
 # if is original, train model on original data; otherwise on revised data.
-NAME = "pegg_o"
+NAME = "transmitter_original"
 IS_ORIGINAL = True
-WALK, JUMP = 0.2, 0.7
 GEN, GATE, CLS = 0.5, 1, 1
-DATA_DIR = './data'
-MODEL_DIR = './tmp'
-
+WALK, JUMP = 0.2, 0.7
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/051127'
+DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 
 def setup_task():
