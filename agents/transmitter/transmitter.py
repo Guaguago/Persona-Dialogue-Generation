@@ -772,7 +772,8 @@ class TransformerAgent(Agent):
                 gen_loss = gen_loss_fn(hybrid_probs_clamp.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
                 class_loss = (self.class_criter(positive_score, pos_label) + self.class_criter(negative_score,
                                                                                                neg_label)) / 2
-                loss = gen_loss + gate_loss + class_loss
+                w1, w2, w3 = self.opt['gen_weight'], self.opt['gate_weight'], self.opt['cls_weight']
+                loss = w1 * gen_loss + w2 * gate_loss + w3 * class_loss
                 # idea interface: drop
                 # gen_loss = self.criterion(scores, tgt_seq) / target_tokens
 

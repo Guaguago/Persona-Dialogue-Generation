@@ -17,8 +17,9 @@ from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 NAME = "pegg_o"
 IS_ORIGINAL = True
 WALK, JUMP = 0.2, 0.7
-DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/tmp'
+GEN, GATE, CLS = 0.5, 1, 1
+DATA_DIR = './data'
+MODEL_DIR = './tmp'
 
 
 
@@ -88,6 +89,9 @@ def setup_args():
         model='agents.transmitter.transmitter:TransformerAgent',
         walk_weight=WALK,
         jump_weight=JUMP,
+        gen_weight=GEN,
+        gate_weight=GATE,
+        cls_weight=CLS,
         datapath=DATA_DIR,
         model_file='{}/transmitter/{}.model'.format(MODEL_DIR, exp_name),
         dict_tokenizer='split',
