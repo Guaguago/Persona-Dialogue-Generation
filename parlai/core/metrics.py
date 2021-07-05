@@ -275,8 +275,8 @@ class Metrics(object):
                 self.metrics['correct_cnt'] += 1
 
             # F1 and BLEU metrics.
-            # f1 = _f1_score(prediction, labels)
-            f1 = _f1_score_content_words_only(prediction, labels)
+            f1 = _f1_score(prediction, labels)
+            # f1 = _f1_score_content_words_only(prediction, labels)
             bleu = _bleu(prediction, labels)
             with self._lock():
                 self.metrics['f1'] += f1
