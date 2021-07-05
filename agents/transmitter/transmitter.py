@@ -334,8 +334,6 @@ class TransformerAgent(Agent):
             self.dict = self.dictionary_class()(opt)
 
             # idea interface
-            ## load kw model
-            self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', self.device)
             self.vocab_map = kw_word_map(self.dict, self.device)
             self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
             self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(
@@ -368,7 +366,8 @@ class TransformerAgent(Agent):
                                           end_idx=self.END_IDX,
                                           dict=self.dict,
                                           special_token_len=len(self.dict.special_tokens),
-                                          longest_label=states.get('longest_label', 1))
+                                          longest_label=states.get('longest_label', 1),
+                                          device=self.device)
 
             if opt.get('display_model', False):
                 print_model(self.model)
@@ -425,6 +424,7 @@ class TransformerAgent(Agent):
             if states:
                 # set loaded states if applicable
                 self.model.load_state_dict(states['model'])
+
 
             if self.use_cuda:
                 self.model.cuda()
@@ -618,7 +618,6 @@ class TransformerAgent(Agent):
 
         # idea interface
         shared['device'] = self.device
-        shared['kw_model'] = self.kw_model
         shared['vocab_map'] = self.vocab_map
         shared['keyword_mask_matrix'] = self.kw_mask_matrix
         shared['kw_graph_distance_matrix'] = self.kw_graph_distance_matrix
@@ -707,7 +706,7 @@ class TransformerAgent(Agent):
         persona_kw_mask = idea_interface['persona_kw_mask']
         kw_probs = None
         if for_kw_model:
-            kw_logits = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.kw_model)
+            kw_logits = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.model.kw_model)
             walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
                                         for_kw_model['batch_context_keywords'], softmax)
             jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)

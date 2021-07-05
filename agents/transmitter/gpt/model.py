@@ -6,12 +6,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
 import os
+from idea import load_kw_model
 
 
 class Gpt2SeqModel(nn.Module):
     def __init__(self, opt, vocab_size, pad_idx, start_idx, end_idx, special_token_len, dict, longest_label=1,
                  length_penalty=1.0, diversity_groups=1, diversity_coef=0.2, annealing_topk=None, annealing=0,
-                 sample=False,
+                 sample=False, device=None,
                  temperature=0.7):
         super().__init__()
         cache_model_dir = os.path.join(opt['datapath'], 'models', 'gpt_models')
@@ -31,6 +32,7 @@ class Gpt2SeqModel(nn.Module):
         self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', cache_dir=cache_model_dir,
                                                                        num_special_tokens=special_token_len)
         # idea interface
+        self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
         self.gate_linear = nn.Linear(768, 1)
         self.softmax = nn.Softmax(dim=-1)
         self.sigmoid = nn.Sigmoid()

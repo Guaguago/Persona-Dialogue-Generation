@@ -124,8 +124,7 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
             kw_model_kwargs = kw_model_checkpoint.pop("model_kwargs")
             kw_model = globals()[kw_model](**kw_model_kwargs)
         kw_model.load_state_dict(kw_model_checkpoint)
-        # pipline, no training required
-        kw_model.eval()
+        kw_model.train()
         return kw_model.to(device)
 
 
