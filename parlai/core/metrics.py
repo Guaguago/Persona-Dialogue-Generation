@@ -13,6 +13,8 @@ from parlai.core.utils import round_sigfigs, no_lock
 from collections import Counter
 
 import re
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
 
 try:
     from nltk.translate import bleu_score as nltkbleu
@@ -27,6 +29,7 @@ re_punc = re.compile(r'[!"#$%&()*+,-./:;<=>?@\[\]\\^`{|}~_\']')
 
 def normalize_answer(s):
     """Lower text and remove punctuation, articles and extra whitespace."""
+
     def remove_articles(text):
         return re_art.sub(' ', text)
 
@@ -40,6 +43,31 @@ def normalize_answer(s):
         return text.lower()
 
     return white_space_fix(remove_articles(remove_punc(lower(s))))
+
+
+# idea interface, content words f1
+def normalize_answer_content_words(s):
+    """Lower text and remove punctuation, articles and extra whitespace."""
+
+    def remove_articles(text):
+        return re_art.sub(' ', text)
+
+    def white_space_fix(text):
+        return ' '.join(text)
+
+    def remove_punc(text):
+        return re_punc.sub(' ', text)  # convert punctuation to spaces
+
+    def lower(text):
+        return text.lower()
+
+    def remove_common_words(text):
+        stop_words = set(stopwords.words('english'))
+        word_tokens = word_tokenize(text)
+        filtered_sentence = [w for w in word_tokens if not w in stop_words]
+        return filtered_sentence
+
+    return white_space_fix(remove_common_words(remove_articles(remove_punc(lower(s)))))
 
 
 def _exact_match(guess, answers):
@@ -78,7 +106,18 @@ def _f1_score(guess, answers):
         return 0
     g_tokens = normalize_answer(guess).split()
     scores = [
-        _prec_recall_f1_score(g_tokens, normalize_answer(a).split())for a in answers
+        _prec_recall_f1_score(g_tokens, normalize_answer(a).split()) for a in answers
+    ]
+    return max(f1 for p, r, f1 in scores)
+
+
+def _f1_score_content_words_only(guess, answers):
+    """Return the max F1 score between the guess and *any* answer."""
+    if guess is None or answers is None:
+        return 0
+    g_tokens = normalize_answer_content_words(guess).split()
+    scores = [
+        _prec_recall_f1_score(g_tokens, normalize_answer_content_words(a).split()) for a in answers
     ]
     return max(f1 for p, r, f1 in scores)
 
@@ -213,7 +252,8 @@ class Metrics(object):
                 self.metrics['correct_cnt'] += 1
 
             # F1 and BLEU metrics.
-            f1 = _f1_score(prediction, labels)
+            # f1 = _f1_score(prediction, labels)
+            f1 = _f1_score_content_words_only(prediction, labels)
             bleu = _bleu(prediction, labels)
             with self._lock():
                 self.metrics['f1'] += f1
