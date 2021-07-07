@@ -425,7 +425,6 @@ class TransformerAgent(Agent):
                 # set loaded states if applicable
                 self.model.load_state_dict(states['model'])
 
-
             if self.use_cuda:
                 self.model.cuda()
 
@@ -711,7 +710,9 @@ class TransformerAgent(Agent):
                                         for_kw_model['batch_context_keywords'], softmax)
             jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)
             w1, w2 = self.opt['walk_weight'], self.opt['jump_weight']
-            kw_probs = (1 - w1 - w1) + w1 * walk_probs + w2 * jump_probs
+            # kw_probs = (1 - w1 - w1) + w1 * walk_probs + w2 * jump_probs
+            jump_gate = self.model.walk_or_jump_gate_linear(jump_probs.float())
+            kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
 
         if is_training:
             self.model.train()
