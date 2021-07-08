@@ -447,7 +447,7 @@ class Gpt2SeqModel(nn.Module):
         pred_output = pred_output[..., :score_output.shape[1]].contiguous()
         return pred_output, score_output, hidden_states
 
-    def beam_search(self, batch_size, prior_context, kw_logits, vocab_map):
+    def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, vocab_map):
         """
         beam search for the validating generation. Note we also impose the n-gram repeating, which is borrowed
         from https://github.com/pytorch/fairseq. The diversity is not useful here.
