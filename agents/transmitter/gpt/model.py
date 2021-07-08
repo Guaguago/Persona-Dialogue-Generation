@@ -253,13 +253,13 @@ class Gpt2SeqModel(nn.Module):
                 # log_probs = F.log_softmax(logits, dim=-1)
 
                 ### idea interface ###
-                softmax = nn.Softmax(dim=-1)
-                sigmoid = nn.Sigmoid()
-                lm_probs = softmax(logits)
-                gate = sigmoid(self.gate_linear(hidden_states[:, -1, :]))
-                wj_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
+                lm_probs = self.softmax(logits)
+                gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
+                jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
+                kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
+                kw_probs = self.softmax(
+                    kw_probs.gather(-1, vocab_map.unsqueeze(0).expand(lm_probs.size())) / 0.01)
 
-                kw_probs = softmax(kw_logits.gather(-1, vocab_map.unsqueeze(0).expand(batch_size, -1)) / 0.01)
                 hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
                 log_probs = torch.log(hybrid_probs)
 

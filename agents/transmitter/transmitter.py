@@ -700,13 +700,12 @@ class TransformerAgent(Agent):
         predictions, cand_preds = None, None
 
         # idea interface: for both train and generation codes.
-        softmax = nn.Softmax(dim=-1)
         for_kw_model = idea_interface['for_kw_model']
         persona_kw_mask = idea_interface['persona_kw_mask']
         kw_logits = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.model.kw_model)
         walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
-                                    for_kw_model['batch_context_keywords'], softmax)
-        jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)
+                                    for_kw_model['batch_context_keywords'], self.model.softmax)
+        jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax)
 
         for_gate = idea_interface['for_gate_module']
         lm_mask = for_gate['lm_mask']
@@ -803,7 +802,7 @@ class TransformerAgent(Agent):
                                          walk_probs=walk_probs,
                                          vocab_map=self.vocab_map)
 
-                hybrid_probs, gate, wj_gate = out[1], out[4], out[5]
+                hybrid_probs = out[1]
 
                 with torch.no_grad():
                     gen_loss_fn = nn.NLLLoss(ignore_index=0, reduction='sum')
