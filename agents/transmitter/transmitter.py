@@ -709,10 +709,15 @@ class TransformerAgent(Agent):
             walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
                                         for_kw_model['batch_context_keywords'], softmax)
             jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)
-            w1, w2 = self.opt['walk_weight'], self.opt['jump_weight']
+            # w1, w2 = self.opt['walk_weight'], self.opt['jump_weight']
             # kw_probs = (1 - w1 - w1) + w1 * walk_probs + w2 * jump_probs
-            jump_gate = self.model.walk_or_jump_gate_linear(jump_probs.float())
-            kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
+            # jump_gate = self.model.walk_or_jump_gate_linear(jump_probs.float())
+            # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
+
+        for_gate = idea_interface['for_gate_module']
+        lm_mask = for_gate['lm_mask']
+        gate_label = for_gate['gate_label']
+        gate_mask = for_gate['gate_mask']
 
         if is_training:
             self.model.train()
@@ -729,9 +734,13 @@ class TransformerAgent(Agent):
                                          rank_during_training=False,
                                          cands=cands,
                                          sampling_cands=sampling_cands,
-                                         valid_cands=valid_cands)
-                # generated response
-                _preds, scores, cand_preds, gate = out[0], out[1], out[2], out[4]
+                                         valid_cands=valid_cands,
+                                         lm_mask=lm_mask,
+                                         jump_probs=jump_probs,
+                                         walk_probs=walk_probs,
+                                         vocab_map=self.vocab_map)
+                # generated response return gate which obtains by gate_linear, gate used to cal loss.
+                _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 
                 positive_score, negative_score = out[-2], out[-1]
 
@@ -746,41 +755,15 @@ class TransformerAgent(Agent):
                 neg_label = torch.tensor([0] * negative_score.size(0), device=positive_score.device)
 
                 ### idea interface ###
-                lm_probs = softmax(scores)
-
-                for_gate = idea_interface['for_gate_module']
-                lm_mask = for_gate['lm_mask']
-                gate_label = for_gate['gate_label']
-                gate_mask = for_gate['gate_mask']
-                temperature = 0.01
-                expanded_kw_logits = kw_probs.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
-                kw_probs = softmax(
-                    expanded_kw_logits.gather(-1, self.vocab_map.unsqueeze(0).unsqueeze(1).expand(
-                        lm_probs.size())) / temperature)
-
-                hybrid_probs = hybrid_kw_and_lm_probs(
-                    gate=gate,
-                    lm_mask=lm_mask,
-                    kw_probs=kw_probs,
-                    lm_probs=lm_probs)
-                hybrid_probs_clamp = hybrid_probs.clamp(min=1e-6)
-
                 gate_loss_fn = nn.BCELoss(weight=gate_mask.view(-1), reduction='mean')
                 gate_loss = gate_loss_fn(gate.view(-1), gate_label.view(-1).float())
 
                 gen_loss_fn = nn.NLLLoss(ignore_index=0, reduction='mean')
-                gen_loss = gen_loss_fn(hybrid_probs_clamp.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
+                gen_loss = gen_loss_fn(hybrid_probs.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
                 class_loss = (self.class_criter(positive_score, pos_label) + self.class_criter(negative_score,
                                                                                                neg_label)) / 2
                 w1, w2, w3 = self.opt['gen_weight'], self.opt['gate_weight'], self.opt['cls_weight']
                 loss = w1 * gen_loss + w2 * gate_loss + w3 * class_loss
-                # idea interface: drop
-                # gen_loss = self.criterion(scores, tgt_seq) / target_tokens
-
-                # idea interface: drop
-                # loss = 0.6 * gen_loss + 0.4 * class_loss
-                # idea interface: add
-                ### idea end ###
 
                 # save loss to metrics
                 self.metrics['correct_tokens'] += correct
@@ -808,7 +791,8 @@ class TransformerAgent(Agent):
                                      rank_during_training=cands is not None,
                                      cands=cands,
                                      valid_cands=valid_cands,
-                                     kw_logits=kw_probs,
+                                     jump_probs=jump_probs,
+                                     walk_probs=walk_probs,
                                      vocab_map=self.vocab_map)
             predictions, cand_preds = out[0], out[2]  # 生成example过程
 
@@ -821,21 +805,15 @@ class TransformerAgent(Agent):
                                          tgt_seq_turn=tgt_seq_turn,
                                          cands=cands,
                                          valid_cands=valid_cands,
-                                         kw_logits=kw_probs,
+                                         jump_probs=jump_probs,
+                                         walk_probs=walk_probs,
                                          vocab_map=self.vocab_map)
 
-                scores, gate = out[1], out[4]
-                lm_probs = softmax(scores)
-                temperature = 0.01
-                expanded_kw_logits = kw_probs.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
-                kw_probs = softmax(
-                    expanded_kw_logits.gather(-1, self.vocab_map.unsqueeze(0).unsqueeze(1).expand(
-                        lm_probs.size())) / temperature)
-                hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
-                hybrid_probs_clamp = hybrid_probs.clamp(min=1e-6)
+                hybrid_probs, gate, wj_gate = out[1], out[4], out[5]
+
                 with torch.no_grad():
                     gen_loss_fn = nn.NLLLoss(ignore_index=0, reduction='sum')
-                    gen_loss = gen_loss_fn(hybrid_probs_clamp.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
+                    gen_loss = gen_loss_fn(hybrid_probs.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
 
                 # just used to calculate perplexity
                 # with torch.no_grad():
