@@ -84,13 +84,15 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax):
     sum_logits = (kw_graph_distance_matrix * (persona_kws.unsqueeze(1))).sum(-1)
     mean_logits = sum_logits / num_persona_kw.unsqueeze(1)
     logits = (mean_logits + (1 - has_persona_kws)).reciprocal()
-    return softmax(logits/0.2)
+    return softmax(logits / 0.2)
 
 
 def hybrid_kw_and_lm_probs(gate, lm_mask, kw_probs, lm_probs):
     # for gate only optimize examples with keywords in the response
-    hybrid_probs = lm_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(
-        1) * kw_probs
+    if lm_mask is not None:
+        hybrid_probs = lm_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(1) * kw_probs
+    else:
+        hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
     return hybrid_probs
 
 
