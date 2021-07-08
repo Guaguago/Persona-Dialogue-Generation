@@ -86,8 +86,6 @@ def setup_args():
         rank_candidates=False,
         # task='tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands',
         model='agents.transmitter.transmitter:TransformerAgent',
-        walk_weight=WALK,
-        jump_weight=JUMP,
         gen_weight=GEN,
         gate_weight=GATE,
         cls_weight=CLS,

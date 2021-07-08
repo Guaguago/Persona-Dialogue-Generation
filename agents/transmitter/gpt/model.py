@@ -114,8 +114,8 @@ class Gpt2SeqModel(nn.Module):
             # predict answers
             temperature = 0.01
             lm_probs = self.softmax(shift_logits)
-            kw_probs = jump_gate * jump_probs.unsqueeze(1).expand(-1, lm_probs.size(1), -1) + \
-                       (1 - jump_gate) * walk_probs.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
+            kw_probs = jump_gate * (jump_probs.unsqueeze(1)).expand(-1, lm_probs.size(1), -1) + \
+                       (1 - jump_gate) * (walk_probs.unsqueeze(1)).expand(-1, lm_probs.size(1), -1)
 
             # expanded_kw_logits = kw_probs.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
             kw_probs = self.softmax(
@@ -170,8 +170,8 @@ class Gpt2SeqModel(nn.Module):
 
 
             else:
-                predictions, hidden_states = self.greedy_decoding(batch_size, prior_context, prior_dis, kw_logits,
-                                                                  vocab_map)
+                predictions, hidden_states = self.greedy_decoding(batch_size, prior_context, prior_dis, walk_probs,
+                                                                  jump_probs, vocab_map)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
             positive_score = self.linear(hidden_states[:, -1, :])
@@ -237,7 +237,7 @@ class Gpt2SeqModel(nn.Module):
     def _length_penalty(self, sequence_lengths):
         return sequence_lengths
 
-    def greedy_decoding(self, batch_size, prior_context, prior_dis, kw_logits, vocab_map):
+    def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, jump_probs, vocab_map):
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
         is_end = torch.zeros(batch_size, dtype=torch.uint8, device=device)
