@@ -703,11 +703,10 @@ class TransformerAgent(Agent):
         softmax = nn.Softmax(dim=-1)
         for_kw_model = idea_interface['for_kw_model']
         persona_kw_mask = idea_interface['persona_kw_mask']
-        if for_kw_model:
-            kw_logits = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.model.kw_model)
-            walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
-                                        for_kw_model['batch_context_keywords'], softmax)
-            jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)
+        kw_logits = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.model.kw_model)
+        walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
+                                    for_kw_model['batch_context_keywords'], softmax)
+        jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, softmax)
 
         for_gate = idea_interface['for_gate_module']
         lm_mask = for_gate['lm_mask']
