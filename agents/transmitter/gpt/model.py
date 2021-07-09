@@ -30,7 +30,7 @@ class Gpt2SeqModel(nn.Module):
         self.vocab_size += 29
 
         # regard input and output as one sentence, given the input as context, generate the next sentence.
-        self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt',
+        self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', cache_dir=cache_model_dir,
                                                                        num_special_tokens=special_token_len)
         # idea interface
         self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
