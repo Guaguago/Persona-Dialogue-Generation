@@ -30,7 +30,7 @@ class Gpt2SeqModel(nn.Module):
         self.vocab_size += 29
 
         # regard input and output as one sentence, given the input as context, generate the next sentence.
-        self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', cache_dir=cache_model_dir,
+        self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt',
                                                                        num_special_tokens=special_token_len)
         # idea interface
         self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
@@ -466,6 +466,9 @@ class Gpt2SeqModel(nn.Module):
         with torch.no_grad():
             # initialize presents
             start_token_tensor = prior_context.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+            jump_probs = jump_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+            walk_probs = walk_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+
             token_tensor = start_token_tensor
             for step in range(self.longest_label):
                 outputs, hidden_states = self.transformer_module.forward(token_tensor)
@@ -475,7 +478,7 @@ class Gpt2SeqModel(nn.Module):
                 lm_probs = self.softmax(logits)
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
                 jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
-                kw_probs = jump_gate * jump_probs.squeeze() + (1 - jump_gate) * walk_probs.squeeze()
+                kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
                 kw_probs = self.softmax(
                     kw_probs.gather(-1, vocab_map.unsqueeze(0).expand(lm_probs.size())) / temperature)
 
