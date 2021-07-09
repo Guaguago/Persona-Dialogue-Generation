@@ -907,10 +907,10 @@ class TransformerAgent(Agent):
                 bsz = self.opt.get('batchsize', batchsize)
                 input_dummy = torch.ones(bsz, self.encode_max_seq_len).long().cuda()
                 output_dummy = torch.ones(bsz, 1).long().cuda()
-                sc = self.model(input_dummy, None, None, output_dummy, None)[1]
-                if self.opt['datatype'] == 'train':
-                    loss = self.criterion(sc, output_dummy)
-                    loss.backward()
+                # sc = self.model.forward(input_dummy, None, None, output_dummy, None)[1]
+                # if self.opt['datatype'] == 'train':
+                #     loss = self.criterion(sc, output_dummy)
+                #     loss.backward()
                 self.buffer_initialized = True
             except RuntimeError as e:
                 if 'out of memory' in str(e):

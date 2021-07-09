@@ -66,9 +66,8 @@ class Gpt2SeqModel(nn.Module):
         nn.init.normal_(self.linear.weight, std=0.02)
 
     def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
-                valid_cands=None, prev_enc=None,
-                rank_during_training=False, sampling=False, sampling_cands=None, walk_probs=None, jump_probs=None,
-                vocab_map=None, lm_mask=None):
+                valid_cands=None, prev_enc=None, rank_during_training=False, sampling=False, sampling_cands=None,
+                walk_probs=None, jump_probs=None, vocab_map=None, lm_mask=None):
         # concat src_seq and tgt_seq as one sentence, use start token to separate them.
         if tgt_seq is not None:
             # keep track of longest label we've ever seen
