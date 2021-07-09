@@ -475,7 +475,7 @@ class Gpt2SeqModel(nn.Module):
                 lm_probs = self.softmax(logits)
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
                 jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
-                kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
+                kw_probs = jump_gate * jump_probs.squeeze() + (1 - jump_gate) * walk_probs.squeeze()
                 kw_probs = self.softmax(
                     kw_probs.gather(-1, vocab_map.unsqueeze(0).expand(lm_probs.size())) / temperature)
 
