@@ -17,7 +17,8 @@ from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 NAME = "pegg-o"
 IS_ORIGINAL = True
 GEN, GATE, CLS = 1, 1, 0.3
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/1103a'
+HYBRID = {'walk': 0.3, 'jump': 0.7}
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/110337'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 
@@ -89,6 +90,7 @@ def setup_args():
         gate_weight=GATE,
         cls_weight=CLS,
         datapath=DATA_DIR,
+        hybrid_weights=HYBRID,
         model_file='{}/transmitter/{}.model'.format(MODEL_DIR, exp_name),
         dict_tokenizer='split',
         datatype='train',

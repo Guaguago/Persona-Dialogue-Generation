@@ -706,6 +706,7 @@ class TransformerAgent(Agent):
         walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
                                     for_kw_model['batch_context_keywords'], self.model.softmax)
         jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax)
+        hybrid_weights = self.opt['hybrid_weights']
 
         for_gate = idea_interface['for_gate_module']
         lm_mask = for_gate['lm_mask']
@@ -731,7 +732,8 @@ class TransformerAgent(Agent):
                                          lm_mask=lm_mask,
                                          jump_probs=jump_probs,
                                          walk_probs=walk_probs,
-                                         vocab_map=self.vocab_map)
+                                         vocab_map=self.vocab_map,
+                                         hybrid_weights=hybrid_weights)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 

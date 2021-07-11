@@ -67,7 +67,7 @@ class Gpt2SeqModel(nn.Module):
 
     def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
                 valid_cands=None, prev_enc=None, rank_during_training=False, sampling=False, sampling_cands=None,
-                walk_probs=None, jump_probs=None, vocab_map=None, lm_mask=None):
+                walk_probs=None, jump_probs=None, vocab_map=None, lm_mask=None, hybrid_weights=None):
         # concat src_seq and tgt_seq as one sentence, use start token to separate them.
         if tgt_seq is not None:
             # keep track of longest label we've ever seen
@@ -113,10 +113,14 @@ class Gpt2SeqModel(nn.Module):
             # predict answers
             temperature = 0.01
             lm_probs = self.softmax(shift_logits)
-            kw_probs = jump_gate * (jump_probs.unsqueeze(1)).expand(-1, lm_probs.size(1), -1) + \
-                       (1 - jump_gate) * (walk_probs.unsqueeze(1)).expand(-1, lm_probs.size(1), -1)
+            # jump or walk [10, 2680]
+            if hybrid_weights is None:
+                kw_probs = jump_gate * (jump_probs.unsqueeze(1)).expand(-1, lm_probs.size(1), -1) + (1 - jump_gate) * (
+                    walk_probs.unsqueeze(1)).expand(-1, lm_probs.size(1), -1)
+            else:
+                kw_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk']).unsqueeze(
+                    1).expand(-1, lm_probs.size(1), -1)
 
-            # expanded_kw_logits = kw_probs.unsqueeze(1).expand(-1, lm_probs.size(1), -1)
             kw_probs = self.softmax(
                 kw_probs.gather(-1, vocab_map.unsqueeze(0).unsqueeze(1).expand(
                     lm_probs.size())) / temperature)
