@@ -762,7 +762,7 @@ class TransformerAgent(Agent):
 
                 # save loss to metrics
                 self.metrics['correct_tokens'] += correct
-                self.metrics['loss'] += loss.item()
+                self.metrics['loss'] += gen_loss.item()
                 self.metrics['num_tokens'] += 1
                 self.metrics['correct_pred'] += rank_correct.item()
                 self.metrics['pred_count'] += positive_score.size(0) * 2
