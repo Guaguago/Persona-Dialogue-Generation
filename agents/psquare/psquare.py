@@ -23,6 +23,9 @@ from agents.transmitter.gpt.optim import GPTOptimizer
 from torch import autograd
 import json
 from agents.psquare.utils import LanguageModel
+from idea import prepare_example_persona_kws, prepare_example_for_kw_model
+from idea import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model, inputs_for_gate_module
+from idea import kw_word_map, get_keyword_mask_matrix, get_kw_graph_distance_matrix
 
 task_key_word = 'OriginalPersonaTeacher'
 
@@ -334,6 +337,13 @@ class PSquareAgent(Agent):
             self.opt = shared['opt']
             opt = self.opt
             self.dict = shared['dict']
+
+            # idea interface
+            self.device = shared['device']
+            self.vocab_map = shared['vocab_map']
+            self.kw_mask_matrix = shared['kw_mask_matrix']
+            self.kw_graph_distance_matrix = shared['kw_graph_distance_matrix']
+
             self.START_IDX = shared['START_IDX']
             self.END_IDX = shared['END_IDX']
             self.NULL_IDX = shared['NULL_IDX']
@@ -355,10 +365,21 @@ class PSquareAgent(Agent):
             if self.use_cuda:
                 print('[ Using CUDA (GPU:{})]'.format(opt['gpu']))
                 torch.cuda.set_device(opt['gpu'])
+                self.device = torch.device('cuda')
+            else:
+                print('[ Using CPU ]')
+                self.device = torch.device('cpu')
 
             self.answers = [None] * self.batch_size
             self.id = 'DSquare Agent'
             self.dict = self.dictionary_class()(opt)
+
+            # idea interface
+            self.vocab_map = kw_word_map(self.dict, self.device)
+            self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
+            self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(
+                self.opt['datapath'] + '/concept_net/keyword_graph_weighted_distance_dict.pkl', self.device)
+
             # we use START markers to start our output
             self.START_IDX = self.dict[self.dict.start_token]
             # we use END markers to end our output
@@ -401,7 +422,8 @@ class PSquareAgent(Agent):
                                                 end_idx=self.END_IDX,
                                                 dict=self.dict,
                                                 special_token_len=len(self.dict.special_tokens),
-                                                longest_label=transmitter_status.get('longest_label', 1))
+                                                longest_label=transmitter_status.get('longest_label', 1),
+                                                device=self.device)
 
             if opt.get('init_model_coherent') and os.path.isfile(opt['init_model_coherent']):
                 init_language = opt['init_model_coherent']
@@ -420,7 +442,8 @@ class PSquareAgent(Agent):
                                               end_idx=self.END_IDX,
                                               dict=self.dict,
                                               special_token_len=len(self.dict.special_tokens),
-                                              longest_label=80)
+                                              longest_label=80,
+                                              device=self.device)
 
             self.coherent_model = coherent_gpt_model
 
@@ -440,9 +463,14 @@ class PSquareAgent(Agent):
                 self.receiver.eval()
 
             if self.use_cuda:
+                print('[ Using CUDA ]')
                 self.transmitter.cuda()
                 self.coherent_model.cuda("cuda:1")
                 self.language_model.cuda('cuda:1')
+                self.device = torch.device('cuda')
+            else:
+                print('[ Using CPU ]')
+                self.device = torch.device('cpu')
 
         self.shuffle_persona = opt['shuffle_persona']
         self.rank = opt['rank_candidates']
@@ -505,6 +533,13 @@ class PSquareAgent(Agent):
     def share(self):
         """Share internal states between parent and child instances."""
         shared = super().share()
+
+        # idea interface
+        shared['device'] = self.device
+        shared['vocab_map'] = self.vocab_map
+        shared['keyword_mask_matrix'] = self.kw_mask_matrix
+        shared['kw_graph_distance_matrix'] = self.kw_graph_distance_matrix
+
         shared['opt'] = self.opt
         shared['answers'] = self.answers
         shared['dict'] = self.dict
@@ -618,6 +653,17 @@ class PSquareAgent(Agent):
         reply = [{'id': self.getID(), 'episode_done': False} for _ in range(self.batch_size)]
         src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn, labels, valid_inds, cands, valid_cands, is_training = self.transmitter_vectorize(
             observations)
+
+        # idea interface
+        persona_kw_mask = prepare_batch_persona_kw_mask(observations, device=self.device)
+        data_for_kw_model = prepare_batch_for_kw_model(observations, device=self.device)
+        data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map)
+        idea_dict = {
+            'for_kw_model': data_for_kw_model,
+            'for_gate_module': data_for_gate,
+            'persona_kw_mask': persona_kw_mask
+        }
+
         cand_inds = [i[0] for i in valid_cands] if valid_cands is not None else None
         predictions, cand_preds = self.transmitter_predict(src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn,
                                                            cands,
@@ -662,7 +708,7 @@ class PSquareAgent(Agent):
 
         if not first_obs.get('preprocessed', False) or 'text2vec' not in first_obs:
             # preprocess text in observations, replace candidates persona into another tagging
-            for ob in obs:
+            for ob_ind, ob in enumerate(obs):
                 if ob.get('text', False):
                     # TODO: not consistent with transmitter
                     text_split = ob['text'].lower().split('\n')
@@ -687,6 +733,9 @@ class PSquareAgent(Agent):
                             persona_text = SpecialToken.persona_start + ' ' + persona_text + ' ' + SpecialToken.persona_end
                         self.persona_transmitter = persona_text
                     ob['persona'] = persona_given
+                    # idea interface
+                    ob['persona_kws'] = prepare_example_persona_kws(self.history[ob_ind], persona_given)
+                    ob['kw_model'] = prepare_example_for_kw_model(self.history[ob_ind], text_split[-1], self.dict)
 
             for ob_ind, ob in enumerate(obs):
                 ob['text2vec'], ob['dis2vec'], ob['turn2vec'], ob['cur_turn'] = maintain_dialog_history(

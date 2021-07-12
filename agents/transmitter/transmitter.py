@@ -291,6 +291,13 @@ class TransformerAgent(Agent):
             # set up shared properties
             self.opt = shared['opt']
             opt = self.opt
+
+            # idea interface
+            self.device = shared['device']
+            self.vocab_map = shared['vocab_map']
+            self.kw_mask_matrix = shared['kw_mask_matrix']
+            self.kw_graph_distance_matrix = shared['kw_graph_distance_matrix']
+
             self.dict = shared['dict']
             self.START_IDX = shared['START_IDX']
             self.END_IDX = shared['END_IDX']

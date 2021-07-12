@@ -381,6 +381,7 @@ def load_agent_module(opt):
                     print("[ warning: overriding opt['{}'] to {} ("
                           "previously: {} )]".format(k, v, new_opt.get(k, None)))
                 new_opt[k] = v
+
         # add model arguments to new_opt if they aren't in new_opt already
         for k, v in opt.items():
             if k not in new_opt:
