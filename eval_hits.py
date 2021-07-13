@@ -1,14 +1,10 @@
 from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
-NAME = "pegg_revised"
-IS_ORIGINAL = False
-WALK, JUMP = 0.7, 0.2
+NAME = "pegg_o"
+IS_ORIGINAL = True
+HYBRID = {'walk': 0.3, 'jump': 0.7}
 MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/11172'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
-
-
-# DATA_DIR = './data'
-# MODEL_DIR = './tmp'
 
 
 def setup_task():
@@ -21,11 +17,9 @@ def setup_task():
 
 def setup_trained_weights():
     if IS_ORIGINAL:
-        # weights_name = '/apdcephfs/share_916081/chencxu/pegg/tmp/transmitter/transmitter_original.model'
-        weights_name = './tmp/transmitter/transmitter_original.model'
+        weights_name = '{}/transmitter/{}.model'.format(MODEL_DIR, NAME)
     else:
-        # weights_name = '/apdcephfs/share_916081/chencxu/pegg/tmp/transmitter/transmitter_revised.model'
-        weights_name = './tmp/psquare/psqaure_revised.model'
+        weights_name = '{}/transmitter/{}.model'.format(MODEL_DIR, NAME)
     return weights_name
 
 
@@ -52,8 +46,7 @@ if __name__ == '__main__':
     model_name = setup_trained_weights()
     parser.set_params(
         datapath=DATA_DIR,
-        walk_weight=WALK,
-        jump_weight=JUMP,
+        hybrid_weights=HYBRID,
         model_file='{}/transmitter/{}.model'.format(MODEL_DIR, NAME),
         model='agents.transmitter.transmitter:TransformerAgent',
         init_model_transmitter=model_name,
