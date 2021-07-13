@@ -625,7 +625,7 @@ class TransformerAgent(Agent):
         # idea interface
         shared['device'] = self.device
         shared['vocab_map'] = self.vocab_map
-        shared['keyword_mask_matrix'] = self.kw_mask_matrix
+        shared['kw_mask_matrix'] = self.kw_mask_matrix
         shared['kw_graph_distance_matrix'] = self.kw_graph_distance_matrix
 
         shared['START_IDX'] = self.START_IDX
