@@ -795,6 +795,7 @@ class TransformerAgent(Agent):
                                      valid_cands=valid_cands,
                                      jump_probs=jump_probs,
                                      walk_probs=walk_probs,
+                                     hybrid_weights=hybrid_weights,
                                      vocab_map=self.vocab_map)
             predictions, cand_preds = out[0], out[2]  # 生成example过程
 
@@ -809,6 +810,7 @@ class TransformerAgent(Agent):
                                          valid_cands=valid_cands,
                                          jump_probs=jump_probs,
                                          walk_probs=walk_probs,
+                                         hybrid_weights=hybrid_weights,
                                          vocab_map=self.vocab_map)
 
                 hybrid_probs = out[1]

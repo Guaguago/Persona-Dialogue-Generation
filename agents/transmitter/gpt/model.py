@@ -158,7 +158,8 @@ class Gpt2SeqModel(nn.Module):
 
             if sampling:
                 predictions, scores, hidden_states = self.sample_decoding(batch_size, prior_context, prior_dis,
-                                                                          self.topk)
+                                                                          self.topk, walk_probs, jump_probs,
+                                                                          hybrid_weights, vocab_map)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
             elif self.training:
@@ -168,7 +169,7 @@ class Gpt2SeqModel(nn.Module):
             elif self.beam_size > 1:
                 # idea interface: modified
                 predictions, hidden_states = self.beam_search(batch_size, prior_context, walk_probs, jump_probs,
-                                                              vocab_map)
+                                                              hybrid_weights, vocab_map)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
 
@@ -379,7 +380,8 @@ class Gpt2SeqModel(nn.Module):
         pred_output = pred_output[..., :score_output.shape[1]].contiguous()
         return pred_output, score_output, hidden_states
 
-    def sample_decoding(self, batch_size, prior_context, prior_dis, topk):
+    def sample_decoding(self, batch_size, prior_context, prior_dis, topk,
+                        walk_probs, jump_probs, hybrid_weights, vocab_map):
         """
         This function is used to simulate the Learned Agent in self-play
         The parameter topk specifies the sampling space at each decoding step.
@@ -450,7 +452,7 @@ class Gpt2SeqModel(nn.Module):
         pred_output = pred_output[..., :score_output.shape[1]].contiguous()
         return pred_output, score_output, hidden_states
 
-    def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, vocab_map):
+    def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights, vocab_map):
         """
         beam search for the validating generation. Note we also impose the n-gram repeating, which is borrowed
         from https://github.com/pytorch/fairseq. The diversity is not useful here.
@@ -482,7 +484,12 @@ class Gpt2SeqModel(nn.Module):
                 lm_probs = self.softmax(logits)
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
                 jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
-                kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
+
+                if hybrid_weights is not None:
+                    kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
+                else:
+                    kw_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
+
                 kw_probs = self.softmax(
                     kw_probs.gather(-1, vocab_map.unsqueeze(0).expand(lm_probs.size())) / temperature)
 
