@@ -75,7 +75,9 @@ def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax):
     num_neighbors = neighbors.sum(1).long()
     has_neighbors = num_neighbors.clamp(0, 1).unsqueeze(1).expand(-1, kw_logits.size(-1))
     neighbor_filter = kw_logits * ((1 - has_neighbors) + neighbors)
-    return softmax(neighbor_filter)
+    logits = walk_logits(neighbor_filter)
+    probs = softmax(logits)
+    return probs
 
 
 def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax):
@@ -84,7 +86,8 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax):
     sum_logits = (kw_graph_distance_matrix * (persona_kws.unsqueeze(1))).sum(-1)
     mean_logits = sum_logits / num_persona_kw.unsqueeze(1)
     logits = (mean_logits + (1 - has_persona_kws)).reciprocal()
-    return softmax(logits / 0.2)
+    probs = softmax(logits / 0.05)
+    return probs
 
 
 def hybrid_kw_and_lm_probs(gate, lm_mask, kw_probs, lm_probs):
@@ -291,3 +294,13 @@ def to_basic_form(tokens):
 def load_pickle(path):
     with open(path, "rb") as f:
         return pickle.load(f)
+
+
+def walk_logits(logits):
+    """
+    Masks everything but the neighbors of the context concepts
+    Used to mask logits such that e^-infinity -> 0 won't contribute to the
+    sum of the denominator.
+    """
+    logits = torch.where(logits == 0.0, torch.ones_like(logits) * -1e5, logits)
+    return logits
