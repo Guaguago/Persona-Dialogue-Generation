@@ -90,7 +90,7 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax):
     return probs
 
 
-def hybrid_kw_and_lm_probs(gate, lm_mask, kw_probs, lm_probs):
+def hybrid_kw_and_lm_probs(gate, kw_probs, lm_probs, lm_mask=None):
     # for gate only optimize examples with keywords in the response
     if lm_mask is not None:
         hybrid_probs = lm_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(1) * kw_probs
@@ -302,5 +302,5 @@ def walk_logits(logits):
     Used to mask logits such that e^-infinity -> 0 won't contribute to the
     sum of the denominator.
     """
-    logits = torch.where(logits == 0.0, torch.ones_like(logits) * -1e5, logits)
+    logits = torch.where(logits == 0.0, torch.ones_like(logits) * -1e10, logits)
     return logits

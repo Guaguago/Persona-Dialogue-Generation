@@ -121,15 +121,18 @@ class Gpt2SeqModel(nn.Module):
                 kw_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk']).unsqueeze(
                     1).expand(-1, lm_probs.size(1), -1)
 
+            revert_logits = kw_probs.logit()
+            revert_logits[..., 0] = -1e10
             kw_probs = self.softmax(
                 kw_probs.gather(-1, vocab_map.unsqueeze(0).unsqueeze(1).expand(
-                    lm_probs.size())) / temperature)
+                    lm_probs.size())))
 
             hybrid_probs = hybrid_kw_and_lm_probs(
                 gate=gate,
-                lm_mask=lm_mask,
                 kw_probs=kw_probs,
-                lm_probs=lm_probs)
+                lm_probs=lm_probs,
+                lm_mask=lm_mask,
+            )
             hybrid_probs = hybrid_probs.clamp(min=1e-6)
 
             pos_seq_len = src_seq_len + tgt_seq.ne(self.pad_idx).sum(dim=1, keepdim=True)
@@ -490,8 +493,11 @@ class Gpt2SeqModel(nn.Module):
                     jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
                     kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
 
+                revert_logits = kw_probs.logit()
+                revert_logits[..., 0] = -1e10
+
                 kw_probs = self.softmax(
-                    kw_probs.gather(-1, vocab_map.unsqueeze(0).expand(lm_probs.size())) / temperature)
+                    kw_probs.gather(-1, vocab_map.unsqueeze(0).expand(lm_probs.size())))
 
                 hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
                 log_probs = torch.log(hybrid_probs)
@@ -654,3 +660,12 @@ def top_k_logits(logits, k):
         values = torch.topk(logits, k)[0]
         batch_mins = values[:, -1].view(-1, 1).expand_as(logits)
         return torch.where(logits < batch_mins, torch.ones_like(logits) * -1e10, logits)
+
+
+def kw_mask_logits(logits):
+    """
+    Masks everything but kw entries as -infinity (1e10).
+    Used to mask logits such that e^-infinity -> 0 won't contribute to the
+    sum of the denominator.
+    """
+    return torch.where(logits == 0, torch.ones_like(logits) * -1e10, logits)
