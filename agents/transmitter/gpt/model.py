@@ -111,7 +111,6 @@ class Gpt2SeqModel(nn.Module):
             jump_gate = self.walk_or_jump_gate_linear(hidden_states[..., src_seq_len:-1, :])
             # lm_labels = tgt_seq.clone()[..., 1:].contiguous()
             # predict answers
-            temperature = 0.01
             lm_probs = self.softmax(shift_logits)
 
             hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs, gate,
@@ -467,7 +466,7 @@ class Gpt2SeqModel(nn.Module):
                 outputs, hidden_states = self.transformer_module.forward(token_tensor)
 
                 logits = outputs[:, -1, :]
-                lm_probs = self.softmax(logits)
+                lm_probs = self.softmax(logits / 1.5)
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
 
                 hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map,

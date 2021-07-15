@@ -98,11 +98,11 @@ def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs
         1).expand(-1, lm_probs.size(1), -1)
 
     revert_logits = kw_probs.logit()
-    revert_logits = top_k_logits(revert_logits, 20)
+    revert_logits = top_k_logits(revert_logits, 10)
     # revert_logits[..., 0] = -1e10
     kw_probs = softmax(
         revert_logits.gather(-1, vocab_map.unsqueeze(0).unsqueeze(1).expand(
-            lm_probs.size())))
+            lm_probs.size())) / 15)
 
     hybrid_probs = hybrid_kw_and_lm_probs(
         gate=gate,
