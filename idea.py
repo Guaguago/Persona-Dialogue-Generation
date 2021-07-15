@@ -90,7 +90,31 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax):
     return probs
 
 
-def hybrid_kw_and_lm_probs(gate, kw_probs, lm_probs, lm_mask=None):
+def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs, gate, softmax, lm_mask=None):
+    # jump or walk [10, 2680]
+    assert len(gate.size()) == 3
+    assert len(lm_probs.size()) == 3
+    kw_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk']).unsqueeze(
+        1).expand(-1, lm_probs.size(1), -1)
+
+    revert_logits = kw_probs.logit()
+    revert_logits = top_k_logits(revert_logits, 20)
+    # revert_logits[..., 0] = -1e10
+    kw_probs = softmax(
+        revert_logits.gather(-1, vocab_map.unsqueeze(0).unsqueeze(1).expand(
+            lm_probs.size())))
+
+    hybrid_probs = hybrid_kw_and_lm_probs(
+        gate=gate,
+        kw_probs=kw_probs,
+        lm_probs=lm_probs,
+        lm_mask=lm_mask,
+    )
+
+    return hybrid_probs
+
+
+def hybrid_kw_and_lm_probs(gate, kw_probs, lm_probs, lm_mask):
     # for gate only optimize examples with keywords in the response
     if lm_mask is not None:
         hybrid_probs = lm_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(1) * kw_probs
@@ -304,3 +328,17 @@ def walk_logits(logits):
     """
     logits = torch.where(logits == 0.0, torch.ones_like(logits) * -1e10, logits)
     return logits
+
+
+def top_k_logits(logits, k):
+    """
+    Masks everything but the k top entries as -infinity (1e10).
+    Used to mask logits such that e^-infinity -> 0 won't contribute to the
+    sum of the denominator.
+    """
+    if k == 0:
+        return logits
+    else:
+        values = torch.topk(logits, k)[0]
+        batch_mins = values[..., -1:]
+        return torch.where(logits < batch_mins, torch.ones_like(logits) * -1e10, logits)

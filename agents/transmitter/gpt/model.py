@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
 import os
 from idea import load_kw_model
-from idea import hybrid_kw_and_lm_probs
+from idea import hybrid_kw_and_lm_probs, cal_hybrid_probs
 
 
 class Gpt2SeqModel(nn.Module):
@@ -113,26 +113,10 @@ class Gpt2SeqModel(nn.Module):
             # predict answers
             temperature = 0.01
             lm_probs = self.softmax(shift_logits)
-            # jump or walk [10, 2680]
-            if hybrid_weights is None:
-                kw_probs = jump_gate * (jump_probs.unsqueeze(1)).expand(-1, lm_probs.size(1), -1) + (1 - jump_gate) * (
-                    walk_probs.unsqueeze(1)).expand(-1, lm_probs.size(1), -1)
-            else:
-                kw_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk']).unsqueeze(
-                    1).expand(-1, lm_probs.size(1), -1)
 
-            revert_logits = kw_probs.logit()
-            revert_logits[..., 0] = -1e10
-            kw_probs = self.softmax(
-                kw_probs.gather(-1, vocab_map.unsqueeze(0).unsqueeze(1).expand(
-                    lm_probs.size())))
+            hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs, gate,
+                                            self.softmax, lm_mask=None)
 
-            hybrid_probs = hybrid_kw_and_lm_probs(
-                gate=gate,
-                kw_probs=kw_probs,
-                lm_probs=lm_probs,
-                lm_mask=lm_mask,
-            )
             hybrid_probs = hybrid_probs.clamp(min=1e-6)
 
             pos_seq_len = src_seq_len + tgt_seq.ne(self.pad_idx).sum(dim=1, keepdim=True)
@@ -483,24 +467,17 @@ class Gpt2SeqModel(nn.Module):
                 outputs, hidden_states = self.transformer_module.forward(token_tensor)
 
                 logits = outputs[:, -1, :]
-                temperature = 0.01
                 lm_probs = self.softmax(logits)
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
 
-                if hybrid_weights is not None:
-                    kw_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
-                else:
-                    jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
-                    kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
+                hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map,
+                                                lm_probs.unsqueeze(1), gate.unsqueeze(1),
+                                                self.softmax, lm_mask=None)
 
-                revert_logits = kw_probs.logit()
-                revert_logits[..., 0] = -1e10
+                # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
+                # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
 
-                kw_probs = self.softmax(
-                    kw_probs.gather(-1, vocab_map.unsqueeze(0).expand(lm_probs.size())))
-
-                hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
-                log_probs = torch.log(hybrid_probs)
+                log_probs = torch.log(hybrid_probs.squeeze(1))
 
                 if 0 < self.no_repeat_ngram_size < step:
                     # for each beam and batch sentence, generate a list of previous ngrams
