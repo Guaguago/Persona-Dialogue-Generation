@@ -53,16 +53,16 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
     batch_context_keywords = inputs_for_kw_model['batch_context_keywords']
     batch_context_concepts = inputs_for_kw_model['batch_context_concepts']
     CN_hopk_edge_index = inputs_for_kw_model['CN_hopk_edge_index']
-    with torch.no_grad():
-        kw_logits = kw_model(CN_hopk_edge_index, batch_context_keywords,
-                             x_utter=batch_context,
-                             x_concept=batch_context_concepts)  # (batch_size, keyword_vocab_size)
+    # with torch.no_grad():
+    kw_logits = kw_model(CN_hopk_edge_index, batch_context_keywords,
+                         x_utter=batch_context,
+                         x_concept=batch_context_concepts)  # (batch_size, keyword_vocab_size)
 
-        if keyword_mask_matrix is not None:
-            batch_vocab_mask = keyword_mask_matrix[batch_context_keywords].sum(dim=1).clamp(min=0,
-                                                                                            max=1)  # (batch_size, keyword_vocab_size)
-            kw_logits = (1 - batch_vocab_mask) * (
-                -5e4) + batch_vocab_mask * kw_logits  # (batch, vocab_size), masked logits
+    if keyword_mask_matrix is not None:
+        batch_vocab_mask = keyword_mask_matrix[batch_context_keywords].sum(dim=1).clamp(min=0,
+                                                                                        max=1)  # (batch_size, keyword_vocab_size)
+        kw_logits = (1 - batch_vocab_mask) * (
+            -5e4) + batch_vocab_mask * kw_logits  # (batch, vocab_size), masked logits
 
     # top_kws = kw_logits.topk(3, dim=-1)[1]
     # (batch_size, 3), need to convert to vocab token id based on word2id
