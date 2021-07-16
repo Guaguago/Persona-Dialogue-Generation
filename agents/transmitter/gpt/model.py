@@ -34,7 +34,7 @@ class Gpt2SeqModel(nn.Module):
                                                                        num_special_tokens=special_token_len)
         # idea interface
         self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
-        self.gate_linear = nn.Linear(768, 1, bias=False)
+        self.gate_linear = nn.Linear(1168, 1, bias=False)
         self.walk_or_jump_gate_linear = nn.Linear(768, 1, bias=False)
         self.softmax = nn.Softmax(dim=-1)
         self.sigmoid = nn.Sigmoid()
@@ -67,7 +67,8 @@ class Gpt2SeqModel(nn.Module):
 
     def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
                 valid_cands=None, prev_enc=None, rank_during_training=False, sampling=False, sampling_cands=None,
-                walk_probs=None, jump_probs=None, vocab_map=None, lm_mask=None, hybrid_weights=None):
+                walk_probs=None, jump_probs=None, vocab_map=None, lm_mask=None, hybrid_weights=None,
+                kw_hidden_states=None):
         # concat src_seq and tgt_seq as one sentence, use start token to separate them.
         if tgt_seq is not None:
             # keep track of longest label we've ever seen
@@ -107,8 +108,12 @@ class Gpt2SeqModel(nn.Module):
 
             # lm labels should mask the source sentence language model
             shift_logits = lm_logits[..., src_seq_len:-1, :].contiguous()
-            gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
-            jump_gate = self.walk_or_jump_gate_linear(hidden_states[..., src_seq_len:-1, :])
+            gate_hidden_states = torch.cat(
+                [hidden_states[..., src_seq_len:-1, :],
+                 kw_hidden_states.unsqueeze(1).expand(-1, shift_logits.size(1), -1)], dim=-1)
+            gate = self.sigmoid(self.gate_linear(gate_hidden_states))
+            # gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
+            # jump_gate = self.walk_or_jump_gate_linear(hidden_states[..., src_seq_len:-1, :])
             # lm_labels = tgt_seq.clone()[..., 1:].contiguous()
             # predict answers
             lm_probs = self.softmax(shift_logits)
@@ -155,8 +160,8 @@ class Gpt2SeqModel(nn.Module):
             elif self.beam_size > 1:
                 # idea interface: modified
                 predictions, hidden_states = self.beam_search(batch_size, prior_context, walk_probs, jump_probs,
-                                                              hybrid_weights, vocab_map)
-                gate = self.sigmoid(self.gate_linear(hidden_states))
+                                                              hybrid_weights, vocab_map, kw_hidden_states)
+                gate = None
 
 
             else:
@@ -438,7 +443,8 @@ class Gpt2SeqModel(nn.Module):
         pred_output = pred_output[..., :score_output.shape[1]].contiguous()
         return pred_output, score_output, hidden_states
 
-    def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights, vocab_map):
+    def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights, vocab_map,
+                    kw_hidden_states):
         """
         beam search for the validating generation. Note we also impose the n-gram repeating, which is borrowed
         from https://github.com/pytorch/fairseq. The diversity is not useful here.
@@ -460,14 +466,20 @@ class Gpt2SeqModel(nn.Module):
             start_token_tensor = prior_context.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             jump_probs = jump_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             walk_probs = walk_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+            kw_hidden_states = kw_hidden_states.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
 
             token_tensor = start_token_tensor
             for step in range(self.longest_label):
                 outputs, hidden_states = self.transformer_module.forward(token_tensor)
 
                 logits = outputs[:, -1, :]
-                lm_probs = self.softmax(logits / 1.5)
-                gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
+                lm_probs = self.softmax(logits)
+                # gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
+
+                gate_hidden_states = torch.cat(
+                    [hidden_states[:, -1, :],
+                     kw_hidden_states], dim=-1)
+                gate = self.sigmoid(self.gate_linear(gate_hidden_states))
 
                 hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map,
                                                 lm_probs.unsqueeze(1), gate.unsqueeze(1),

@@ -709,7 +709,7 @@ class TransformerAgent(Agent):
         # idea interface: for both train and generation codes.
         for_kw_model = idea_interface['for_kw_model']
         persona_kw_mask = idea_interface['persona_kw_mask']
-        kw_logits = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.model.kw_model)
+        kw_logits, kw_hidden_states = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.model.kw_model)
         walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
                                     for_kw_model['batch_context_keywords'], self.model.softmax)
         jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax)
@@ -740,7 +740,8 @@ class TransformerAgent(Agent):
                                          jump_probs=jump_probs,
                                          walk_probs=walk_probs,
                                          vocab_map=self.vocab_map,
-                                         hybrid_weights=hybrid_weights)
+                                         hybrid_weights=hybrid_weights,
+                                         kw_hidden_states=kw_hidden_states)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 
@@ -796,7 +797,8 @@ class TransformerAgent(Agent):
                                      jump_probs=jump_probs,
                                      walk_probs=walk_probs,
                                      hybrid_weights=hybrid_weights,
-                                     vocab_map=self.vocab_map)
+                                     vocab_map=self.vocab_map,
+                                     kw_hidden_states=kw_hidden_states)
             predictions, cand_preds = out[0], out[2]  # 生成example过程
 
             if tgt_seq is not None:
@@ -811,7 +813,8 @@ class TransformerAgent(Agent):
                                          jump_probs=jump_probs,
                                          walk_probs=walk_probs,
                                          hybrid_weights=hybrid_weights,
-                                         vocab_map=self.vocab_map)
+                                         vocab_map=self.vocab_map,
+                                         kw_hidden_states=kw_hidden_states)
 
                 hybrid_probs = out[1]
 

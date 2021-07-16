@@ -154,9 +154,10 @@ class KW_GNN(torch.nn.Module):
             utter_out = self.forward_utterance(x_utter)
             out = torch.cat([out, utter_out], dim=-1)  # (batch_size, *)
 
+        kw_hidden_states = out
         # final linear layer
         out = self.mlp(out)  # out: (batch_size, keyword_vocab_size)
-        return out
+        return out, kw_hidden_states
 
     def init_embedding(self, embedding, fix_word_embedding):
         print("initializing word embedding layer...")
