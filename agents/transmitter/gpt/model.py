@@ -34,7 +34,7 @@ class Gpt2SeqModel(nn.Module):
                                                                        num_special_tokens=special_token_len)
         # idea interface
         self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
-        self.gate_linear = nn.Linear(1168, 1, bias=False)
+        self.gate_linear = nn.Linear(768, 1, bias=False)
         self.walk_or_jump_gate_linear = nn.Linear(768, 1, bias=False)
         self.softmax = nn.Softmax(dim=-1)
         self.sigmoid = nn.Sigmoid()
@@ -108,10 +108,10 @@ class Gpt2SeqModel(nn.Module):
 
             # lm labels should mask the source sentence language model
             shift_logits = lm_logits[..., src_seq_len:-1, :].contiguous()
-            gate_hidden_states = torch.cat(
-                [hidden_states[..., src_seq_len:-1, :],
-                 kw_hidden_states.unsqueeze(1).expand(-1, shift_logits.size(1), -1)], dim=-1)
-            gate = self.sigmoid(self.gate_linear(gate_hidden_states))
+            # gate_hidden_states = torch.cat(
+            #     [hidden_states[..., src_seq_len:-1, :],
+            #      kw_hidden_states.unsqueeze(1).expand(-1, shift_logits.size(1), -1)], dim=-1)
+            gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
             # gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
             # jump_gate = self.walk_or_jump_gate_linear(hidden_states[..., src_seq_len:-1, :])
             # lm_labels = tgt_seq.clone()[..., 1:].contiguous()
@@ -466,7 +466,7 @@ class Gpt2SeqModel(nn.Module):
             start_token_tensor = prior_context.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             jump_probs = jump_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             walk_probs = walk_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
-            kw_hidden_states = kw_hidden_states.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+            # kw_hidden_states = kw_hidden_states.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
 
             token_tensor = start_token_tensor
             for step in range(self.longest_label):
@@ -476,10 +476,10 @@ class Gpt2SeqModel(nn.Module):
                 lm_probs = self.softmax(logits)
                 # gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
 
-                gate_hidden_states = torch.cat(
-                    [hidden_states[:, -1, :],
-                     kw_hidden_states], dim=-1)
-                gate = self.sigmoid(self.gate_linear(gate_hidden_states))
+                # gate_hidden_states = torch.cat(
+                #     [hidden_states[:, -1, :],
+                #      kw_hidden_states], dim=-1)
+                gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
 
                 hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map,
                                                 lm_probs.unsqueeze(1), gate.unsqueeze(1),
