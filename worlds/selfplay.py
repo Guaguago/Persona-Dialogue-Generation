@@ -169,6 +169,8 @@ class SelfPlayWorld(DialogPartnerWorld):
             for h in agents[1].history:
                 h['labels'] = [first_mess_b]
             agents[1].observe([deepcopy(obs_start_b) for _ in range(self.opt['batchsize'])])
+            for h in agents[1].history:
+                h['labels'] = []
             # agents[0].observe(deepcopy(start_obs_a))
             # agents[1].observe(deepcopy(start_obs_b))
 

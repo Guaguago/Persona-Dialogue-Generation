@@ -407,13 +407,15 @@ def maintain_dialog_history(history, observation, reply='', persona_append_strat
         if use_reply == 'model' or (use_reply == 'label_else_model' and
                                     len(history['labels']) == 0):
             if reply:
-                parse_vec = parse(reply, split_sentence)
-                history['dialog'].extend(parse_vec)
-                # reply of last turn, distance should be equal to 1
-                dis_vec = [0 for _ in range(len(parse_vec))]
-                history['distance'].extend(dis_vec)
-                turn_vec = [cur_turn for _ in range(len(parse_vec))]
-                history['turns'].extend(turn_vec)
+                # idea drop
+                pass
+                # parse_vec = parse(reply, split_sentence)
+                # history['dialog'].extend(parse_vec)
+                # # reply of last turn, distance should be equal to 1
+                # dis_vec = [0 for _ in range(len(parse_vec))]
+                # history['distance'].extend(dis_vec)
+                # turn_vec = [cur_turn for _ in range(len(parse_vec))]
+                # history['turns'].extend(turn_vec)
 
         elif len(history['labels']) > 0:
             r = history['labels'][0]
