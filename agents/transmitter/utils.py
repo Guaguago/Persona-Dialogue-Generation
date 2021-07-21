@@ -445,7 +445,7 @@ def maintain_dialog_history(history, observation, reply='', persona_append_strat
             del history['dialog'][ind]
 
     obs = observation
-    if 'text' in obs:
+    if 'text' in obs and obs['text'] is not None:
         parse_vec = parse(obs['text'], split_sentence)
         history['dialog'].extend(parse_vec)
         dis_vec = [0 for _ in range(len(parse_vec))]

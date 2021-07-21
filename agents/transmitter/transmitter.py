@@ -674,7 +674,13 @@ class TransformerAgent(Agent):
 
                 # idea interface
                 obs['persona_kws'] = prepare_example_persona_kws(self.history, persona_given)
-                obs['kw_model'] = prepare_example_for_kw_model(self.history, text_split[-1], self.dict)
+
+                if self.history and 'labels' in self.history:
+                    labels = self.history['labels'][0]
+                else:
+                    labels = None
+
+                obs['kw_model'] = prepare_example_for_kw_model(labels, text_split[-1], self.dict)
 
             obs['text2vec'], obs['dis2vec'], obs['turn2vec'], obs['cur_turn'] = maintain_dialog_history(
                 self.history, obs,
