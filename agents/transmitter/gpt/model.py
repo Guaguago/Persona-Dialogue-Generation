@@ -148,9 +148,9 @@ class Gpt2SeqModel(nn.Module):
                 prior_dis = None
 
             if sampling:
-                predictions, scores, hidden_states = self.sample_decoding(batch_size, prior_context, prior_dis,
-                                                                          self.topk, walk_probs, jump_probs,
-                                                                          hybrid_weights, vocab_map)
+                predictions, hybrid_probs, hidden_states = self.sample_decoding(batch_size, prior_context, prior_dis,
+                                                                                self.topk, walk_probs, jump_probs,
+                                                                                hybrid_weights, vocab_map)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
             elif self.training:
@@ -235,7 +235,7 @@ class Gpt2SeqModel(nn.Module):
     def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, jump_probs, vocab_map):
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
-        is_end = torch.zeros(batch_size, dtype=torch.uint8, device=device)
+        is_end = torch.zeros(batch_size, dtype=torch.bool, device=device)
 
         pred_output = torch.zeros((batch_size, self.longest_label), dtype=torch.long, device=device)
         past_input = prior_context
@@ -309,7 +309,7 @@ class Gpt2SeqModel(nn.Module):
         """
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
-        is_end = torch.zeros(batch_size, dtype=torch.uint8, device=device)
+        is_end = torch.zeros(batch_size, dtype=torch.bool, device=device)
 
         pred_output = torch.zeros((batch_size, self.longest_label), dtype=torch.long, device=device)
         past_input = prior_context
@@ -379,7 +379,7 @@ class Gpt2SeqModel(nn.Module):
         """
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
-        is_end = torch.zeros(batch_size, dtype=torch.uint8, device=device)
+        is_end = torch.zeros(batch_size, dtype=torch.bool, device=device)
 
         pred_output = torch.zeros((batch_size, self.longest_label), dtype=torch.long, device=device)
         past_input = prior_context
@@ -388,14 +388,23 @@ class Gpt2SeqModel(nn.Module):
         # start as the last element
         src_len = prior_context.size(1) - 1
         last_logits = None
+        last_hiddens = None
         for step in range(self.longest_label):
             logits, hidden_states = self.transformer_module.forward(past_input, None, past_dis)
             last_logits = logits
+            last_hiddens = hidden_states
             # logits, _ = self.transformer_module.forward(past)
             logits = logits[:, -1, :] / self.temperature
+            lm_probs = self.softmax(logits)
+            gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
+
+            hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs.unsqueeze(1),
+                                            gate.unsqueeze(1), self.softmax)
+            hybrid_probs = hybrid_probs.squeeze(1)
+
             # add score
-            logits = top_k_logits(logits, k=topk)
-            probs = F.softmax(logits, dim=-1)
+            # logits = top_k_logits(logits, k=topk)
+            # probs = F.softmax(logits, dim=-1)
 
             if 0 < self.no_repeat_ngram_size < step:
                 # for each beam and batch sentence, generate a list of previous ngrams
@@ -406,7 +415,7 @@ class Gpt2SeqModel(nn.Module):
                         gen_ngrams[bbsz_idx][tuple(ngram[:-1])] = \
                             gen_ngrams[bbsz_idx].get(tuple(ngram[:-1]), []) + [ngram[-1]]
 
-            predict_tok = torch.multinomial(probs, num_samples=1)
+            predict_tok = torch.multinomial(hybrid_probs, num_samples=1)
             # must one (including END)
             # look forward one step
             pred_output[:, step] = predict_tok.view(-1)
@@ -425,9 +434,9 @@ class Gpt2SeqModel(nn.Module):
                     banned_tokens = [[] for _ in range(batch_size)]
 
                 for bbsz_idx in range(batch_size):
-                    probs[bbsz_idx, banned_tokens[bbsz_idx]] = 0.0
+                    hybrid_probs[bbsz_idx, banned_tokens[bbsz_idx]] = 0.0
 
-                predict_tok = torch.multinomial(probs, num_samples=1)
+                predict_tok = torch.multinomial(hybrid_probs, num_samples=1)
                 # look forward one step
                 pred_output[:, step] = predict_tok.view(-1)
 
@@ -440,8 +449,13 @@ class Gpt2SeqModel(nn.Module):
             if (~is_end).sum() == 0:
                 break
         score_output = last_logits[..., src_len:, :].contiguous()
+        last_hiddens = last_hiddens[..., src_len:, :].contiguous()
+        gate = self.sigmoid(self.gate_linear(last_hiddens))
+        lm_probs = self.softmax(score_output)
+        hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs, gate, self.softmax)
+
         pred_output = pred_output[..., :score_output.shape[1]].contiguous()
-        return pred_output, score_output, hidden_states
+        return pred_output, hybrid_probs, hidden_states
 
     def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights, vocab_map,
                     kw_hidden_states):
@@ -453,7 +467,7 @@ class Gpt2SeqModel(nn.Module):
 
         beam_scores = torch.zeros(batch_size, self.beam_size, device=device)
         beam_lens = torch.ones(batch_size, self.beam_size, dtype=torch.long, device=device)
-        is_end = torch.zeros(batch_size, self.beam_size, dtype=torch.uint8, device=device)
+        is_end = torch.zeros(batch_size, self.beam_size, dtype=torch.bool, device=device)
 
         current_sample_prob = 1
         group_size = self.beam_size // self.diversity_groups

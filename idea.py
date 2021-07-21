@@ -23,7 +23,7 @@ keyword2id, id2keyword, node2id, word2id, CN_hopk_graph_dict = pkl_list
 
 # idea interface
 def prepare_example_persona_kws(history, persona_str):
-    if history:
+    if history and 'persona_kws' in history:
         return history['persona_kws']
     else:
         return extract_keywords(persona_str, keyword2id, 30)
@@ -55,8 +55,8 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
     CN_hopk_edge_index = inputs_for_kw_model['CN_hopk_edge_index']
     with torch.no_grad():
         kw_logits, kw_hidden_states = kw_model(CN_hopk_edge_index, batch_context_keywords,
-                             x_utter=batch_context,
-                             x_concept=batch_context_concepts)  # (batch_size, keyword_vocab_size)
+                                               x_utter=batch_context,
+                                               x_concept=batch_context_concepts)  # (batch_size, keyword_vocab_size)
 
         if keyword_mask_matrix is not None:
             batch_vocab_mask = keyword_mask_matrix[batch_context_keywords].sum(dim=1).clamp(min=0,
@@ -220,25 +220,29 @@ def get_keyword_mask_matrix(device):
 
 def process_context(history, text, dict):
     context = ''
-    if text != '__silence__':
+    if text is None or text == '__silence__':
+        minus_one = [0] * 30
+    else:
         context += text
         minus_one = dict.split_tokenize(context)
         minus_one = [word2id[w] if w in word2id else word2id["<unk>"] for w in minus_one]
         minus_one = pad_sentence(minus_one, 30, word2id["<pad>"])
-    else:
-        minus_one = [0] * 30
 
-    if history:
-        history = history['labels'][0]
-        if history != '__silence__':
-            context = history + ' ' + context
-            minus_two = dict.split_tokenize(history)
-            minus_two = [word2id[w] if w in word2id else word2id["<unk>"] for w in minus_two]
-            minus_two = pad_sentence(minus_two, 30, word2id["<pad>"])
-        else:
-            minus_two = [0] * 30
-    else:
+    if history is None or history == '__silence__':
+        # if history['labels']:
+        #     history_text = history['labels'][0]
+        # else:
+        #     history_text = ''
+        # dialog = np.array(history['dialog'])
+        # idx_beg = np.where(dialog == 40478)[0][-1].item()
+        # idx_end = np.where(dialog == 40479)[0][-1].item()
+        # history_text = dict.tokenizer.decode(dialog[idx_beg + 1: idx_end])
         minus_two = [0] * 30
+    else:
+        context = history + ' ' + context
+        minus_two = dict.split_tokenize(history)
+        minus_two = [word2id[w] if w in word2id else word2id["<unk>"] for w in minus_two]
+        minus_two = pad_sentence(minus_two, 30, word2id["<pad>"])
 
     return context, [minus_two, minus_one]
 

@@ -320,7 +320,8 @@ def maintain_dialog_history(history, observation, reply='', persona_append_strat
     if 'dialog' not in history:
         history['dialog'] = deque(maxlen=max_history_len)
         history['episode_done'] = False
-        history['labels'] = []
+        if 'labels' not in history:
+            history['labels'] = []
         history['cur_turn'] = -1
         history['distance'] = deque(maxlen=max_history_len)
         history['turns'] = deque(maxlen=max_history_len)

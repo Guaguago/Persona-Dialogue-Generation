@@ -26,6 +26,7 @@ from agents.psquare.utils import LanguageModel
 from idea import prepare_example_persona_kws, prepare_example_for_kw_model
 from idea import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model, inputs_for_gate_module
 from idea import kw_word_map, get_keyword_mask_matrix, get_kw_graph_distance_matrix
+from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs
 
 task_key_word = 'OriginalPersonaTeacher'
 
@@ -360,7 +361,7 @@ class PSquareAgent(Agent):
             # language model to score
             self.coherent_model = shared['coherent_model']
             self.language_model = shared['language_model']
-            self.id = 'DSquare Agent'
+            self.id = 'Pegg Agent'
         else:
             if self.use_cuda:
                 print('[ Using CUDA (GPU:{})]'.format(opt['gpu']))
@@ -371,7 +372,7 @@ class PSquareAgent(Agent):
                 self.device = torch.device('cpu')
 
             self.answers = [None] * self.batch_size
-            self.id = 'DSquare Agent'
+            self.id = 'Pegg Agent'
             self.dict = self.dictionary_class()(opt)
 
             # idea interface
@@ -537,7 +538,7 @@ class PSquareAgent(Agent):
         # idea interface
         shared['device'] = self.device
         shared['vocab_map'] = self.vocab_map
-        shared['keyword_mask_matrix'] = self.kw_mask_matrix
+        shared['kw_mask_matrix'] = self.kw_mask_matrix
         shared['kw_graph_distance_matrix'] = self.kw_graph_distance_matrix
 
         shared['opt'] = self.opt
@@ -637,7 +638,12 @@ class PSquareAgent(Agent):
         else:
             # batch is in the training.
             act = self.batch_act(self.observation)
-            if 'DSquare' in act[0]['id'] and 'init' not in self.observation[0]['id']:  # Only add dialogue text excluding the persona text
+
+            # idea interface
+            # self.history[labels]
+
+            if 'Pegg' in act[0]['id'] and 'init' not in self.observation[0][
+                'id']:  # Only add dialogue text excluding the persona text
                 if len(self.send_messages) == 0:  # At the beginning of an episode
                     if len(self.receive_messages) == 0:  # The first speaker receive no text before it first speaks
                         self.is_first_speaker = True
@@ -646,6 +652,11 @@ class PSquareAgent(Agent):
                 self.send_messages.append([a['text'] for a in act])
             if self.is_training and is_display:  # TODO: clean up logging
                 print('[ {} speaks ] {}'.format(self.id, act[0]['text']))
+
+            # idea interface
+            for idx, x in enumerate(act):
+                self.history[idx]['labels'] = [act[idx]['text']]
+
         return act
 
     def batch_act(self, observations):
@@ -657,17 +668,12 @@ class PSquareAgent(Agent):
         # idea interface
         persona_kw_mask = prepare_batch_persona_kw_mask(observations, device=self.device)
         data_for_kw_model = prepare_batch_for_kw_model(observations, device=self.device)
-        data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map)
-        idea_dict = {
-            'for_kw_model': data_for_kw_model,
-            'for_gate_module': data_for_gate,
-            'persona_kw_mask': persona_kw_mask
-        }
 
         cand_inds = [i[0] for i in valid_cands] if valid_cands is not None else None
         predictions, cand_preds = self.transmitter_predict(src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn,
-                                                           cands,
-                                                           cand_inds, is_training)
+                                                           cands, cand_inds, is_training,
+                                                           data_for_kw_model=data_for_kw_model,
+                                                           persona_kw_mask=persona_kw_mask)
 
         if self.is_training:
             report_freq = 0
@@ -718,10 +724,23 @@ class PSquareAgent(Agent):
                             t = t.replace('your persona: ', '').replace('partner\'s persona: ', '')
                             persona_given += t + '\n'
                     # TODO: drop the old method to encode persona, we use the separate encoder to do that.
-                    if self.use_talk_tokens:
-                        ob['text'] = SpecialToken.talk_1_start + ' ' + text_split[-1] + ' ' + SpecialToken.talk_1_end
+
+                    # idea interface
+                    if self.answers[0] is not None:
+                        if self.use_talk_tokens:
+                            # idea modified ob['text'] = SpecialToken.talk_1_start + ' ' + text_split[-1] + ' ' + SpecialToken.talk_1_end
+                            ob['text'] = SpecialToken.talk_1_start + ' ' + self.answers[
+                                ob_ind] + ' ' + SpecialToken.talk_1_end
+                        else:
+                            ob['text'] = self.answers[ob_ind]
                     else:
-                        ob['text'] = text_split[-1]
+                        if text_split[-1].startswith('your persona') or text_split[-1].startswith('partner\'s persona'):
+                            ob['text'] = None
+                        else:
+                            if self.use_talk_tokens:
+                                ob['text'] = SpecialToken.talk_1_start + ' ' + text_split[-1] + ' ' + SpecialToken.talk_1_end
+                            else:
+                                ob['text'] = self.answers[ob_ind]
 
                     if persona_given != '':
                         self.persona_receiver = ' '.join([' ' + text.strip() + ' ' + self.receiver_dict.end_token
@@ -735,7 +754,13 @@ class PSquareAgent(Agent):
                     ob['persona'] = persona_given
                     # idea interface
                     ob['persona_kws'] = prepare_example_persona_kws(self.history[ob_ind], persona_given)
-                    ob['kw_model'] = prepare_example_for_kw_model(self.history[ob_ind], text_split[-1], self.dict)
+
+                    if self.send_messages:
+                        message = self.send_messages[0][ob_ind]
+                    else:
+                        message = None
+
+                    ob['kw_model'] = prepare_example_for_kw_model(message, self.answers[ob_ind], self.dict)
 
             for ob_ind, ob in enumerate(obs):
                 ob['text2vec'], ob['dis2vec'], ob['turn2vec'], ob['cur_turn'] = maintain_dialog_history(
@@ -755,7 +780,7 @@ class PSquareAgent(Agent):
                 ob['text2vec'] = deque(ob['text2vec'], maxlen=self.truncate)
                 ob['turn2vec'] = deque(ob['turn2vec'], maxlen=self.truncate)
 
-        if self.is_training and 'DSquare' in first_obs['id'] and not first_obs['episode_done']:
+        if self.is_training and 'Pegg' in first_obs['id'] and not first_obs['episode_done']:
             # observe text from the other interlocutor
             self.receive_messages.append([ob['text'] for ob in obs])
             # obs['text'] = self.persona + obs['text'] # Adding persona to the beginning of each turn
@@ -767,7 +792,7 @@ class PSquareAgent(Agent):
             self.observation = obs[0]
 
         if self.is_training and first_obs['episode_done'] \
-                and 'reward' in first_obs and 'DSquare' in first_obs['id'] and not self.greedy_response:
+                and 'reward' in first_obs and 'Pegg' in first_obs['id'] and not self.greedy_response:
             # end of an self-play episode, backwards propagation
             # assume each turn, each word has similar proportion of rewards
             rewards = np.stack([o['reward'] for o in obs])  # average the reward over turns
@@ -791,14 +816,21 @@ class PSquareAgent(Agent):
         return self.observation
 
     def transmitter_predict(self, src_seq, src_seq_turn, src_seq_dis, tgt_seq=None, tgt_seq_turn=None, cands=None,
-                            valid_cands=None,
-                            is_training=False):
+                            valid_cands=None, is_training=False, data_for_kw_model=None, persona_kw_mask=None):
         """Produce a prediction from our transmitter.
 
         Keep track of gradients if is_training
         """
         # gpu_tracker.track()
         predictions, cand_preds = None, None
+
+        # idea interface: for both train and generation codes.
+        kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, self.kw_mask_matrix, self.transmitter.kw_model)
+        walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
+                                    data_for_kw_model['batch_context_keywords'], self.transmitter.softmax)
+        jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, self.transmitter.softmax)
+        hybrid_weights = self.opt['hybrid_weights']
+
         if is_training:
             self.transmitter.train()
             try:
@@ -833,12 +865,16 @@ class PSquareAgent(Agent):
                     out = self.transmitter.forward(src_seq=src_seq,
                                                    src_seq_turn=src_seq_turn,
                                                    src_seq_dis=src_seq_dis,
-                                                   sampling=True)
+                                                   sampling=True,
+                                                   walk_probs=walk_probs,
+                                                   jump_probs=jump_probs,
+                                                   hybrid_weights=hybrid_weights,
+                                                   vocab_map=self.vocab_map)
                     # generated response
-                    predictions, scores, cand_preds = out[0], out[1], out[2]
+                    predictions, hybrid_probs, cand_preds = out[0], out[1], out[2]
                     idx = predictions.unsqueeze(dim=2)
                     # keep the same with PyTorch bernoulli distribution, here take the log probability
-                    lprobs = F.log_softmax(scores, dim=2)
+                    lprobs = hybrid_probs.log()
                     # print("lprobs: {}, shape: {}".format(lprobs, lprobs.size()))
                     zero_mask = predictions.ne(self.NULL_IDX).float()
                     log_prob = torch.gather(lprobs, 2, idx).squeeze(2)
