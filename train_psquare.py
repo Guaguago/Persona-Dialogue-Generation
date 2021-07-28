@@ -16,9 +16,10 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 
 IS_ORIGINAL = True
 NAME = "pegg-o"
-GEN, GATE, CLS = 1, 1, 0.3
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/1103a'
+GEN, GATE, CLS = 0.7, 0.2, 0.1
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/72182f'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
+
 
 def set_seed(seed=1):
     torch.manual_seed(seed)
@@ -37,7 +38,7 @@ def setup_args():
         exp_eval_task = 'tasks.convai2transmitter.agents:SelfOriginalTeacher:no_cands'
     else:
         # receiver_basic = 'receiver_original'
-        transmitter_basic = 'transmitter_original'
+        transmitter_basic = 'pegg-o'
         exp_task = 'tasks.convai2.agents:RevisedTeacher,tasks.convai2.agents:RevisedPersonaTeacher'
         exp_eval_task = 'tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands'
 
@@ -82,8 +83,8 @@ def setup_args():
         embedding_type_transmitter='glove_fixed',
         optimizer_step=-1,
         # receiver configuration
-        model_receiver='agents.receiver.receiver:ReceiverAgent',
-        init_model_receiver='./tmp/receiver/{}.model'.format(receiver_basic),
+        # model_receiver='agents.receiver.receiver:ReceiverAgent',
+        # init_model_receiver='./tmp/receiver/{}.model'.format(receiver_basic),
         # language model configuration
         init_model_coherent='{}/transmitter/{}.model'.format(MODEL_DIR, transmitter_basic),
         # validation configuration
