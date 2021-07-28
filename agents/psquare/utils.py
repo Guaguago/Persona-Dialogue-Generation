@@ -16,7 +16,8 @@ def _length_penalty(sequence_lengths):
 
 class LanguageModel(object):
     def __init__(self, pad_idx):
-        self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt')
+        self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt',
+                                                                       cache_dir='/apdcephfs/share_916081/chencxu/pegg/data/models/gpt_models')
         self.transformer_module.eval()
         self.pad_idx = pad_idx
 
