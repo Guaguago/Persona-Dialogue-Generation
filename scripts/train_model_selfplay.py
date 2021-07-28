@@ -300,7 +300,8 @@ class TrainLoop():
 
         if not self.saved:
             # save agent
-            self.agent.save(component='transmitter')
+            # self.agent.save(component='transmitter')
+            self.agent.save()
             # self.agent.save(component='receiver') # TODO: API for save all components
         elif opt.get('model_file_transmitter') and opt.get('model_file_receiver'): # TODO: check if both components are necessary
             # reload best validation model

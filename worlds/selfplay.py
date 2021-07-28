@@ -1,4 +1,5 @@
 """Self-play between two user agents with initial message provided by the task_agents"""
+from idea import cal_final_reward
 from parlai.core.agents import _create_task_agents
 from parlai.core.worlds import DialogPartnerWorld, BatchWorld
 import numpy as np
@@ -177,8 +178,8 @@ class SelfPlayWorld(DialogPartnerWorld):
             first_message = [first_mess_b] * self.opt['batchsize']
 
             # actual persona are confess by SELF
-            persona_agent_a = agents[0].confess()
-            persona_agent_b = agents[1].confess()
+            # persona_agent_a = agents[0].confess()
+            # persona_agent_b = agents[1].confess()
 
             if is_display:
                 print('```')
@@ -193,112 +194,116 @@ class SelfPlayWorld(DialogPartnerWorld):
                 self.parley(is_display)
 
             # virtual persona are understand by SELF
-            vt_persona_agent_a = agents[0].understand()
-            vt_persona_agent_b = agents[1].understand()
+            # vt_persona_agent_a = agents[0].understand()
+            # vt_persona_agent_b = agents[1].understand()
+            #
+            # # receive message and send message are as attribute of the agent
+            # # therefore we here only pass-by the first message
+            # agent_a_coherent_reward = agents[0].coherent_score(first_message)
+            # agent_b_coherent_reward = agents[1].coherent_score(first_message)
+            #
+            # agent_a_language_reward = agents[0].language_score()
+            # agent_b_language_reward = agents[1].language_score()
 
-            # receive message and send message are as attribute of the agent
-            # therefore we here only pass-by the first message
-            agent_a_coherent_reward = agents[0].coherent_score(first_message)
-            agent_b_coherent_reward = agents[1].coherent_score(first_message)
+            agent_a_fcg_reward = agents[0].finding_common_ground_score(agents[1].persona_transmitter)
+            reward_a_list = cal_final_reward(agent_a_fcg_reward)
 
-            agent_a_language_reward = agents[0].language_score()
-            agent_b_language_reward = agents[1].language_score()
-
-            # get batch size
-            batch_size = vt_persona_agent_a.size(0)
-
-            persona_agent_a = persona_agent_a.unsqueeze(dim=0).repeat(batch_size, 1, 1)
-            persona_agent_b = persona_agent_b.unsqueeze(dim=0).repeat(batch_size, 1, 1)
-
-            agent_a_persona_reward = agents[0].measure_persona_similarity(vt_persona_agent_a, persona_agent_a)
-            agent_b_persona_reward = agents[1].measure_persona_similarity(vt_persona_agent_b, persona_agent_b)
-
-            turn_size = agent_a_persona_reward.shape[1]
-
-            # delayed reward
-            discount_gamma = 0.5
-
-            if discount_gamma > 0:
-                # use first second to reorder
-                if agents[0].is_first_speaker:
-                    history_reward = np.stack([agent_a_persona_reward, agent_b_persona_reward], axis=2)
-                else:
-                    history_reward = np.stack([agent_b_persona_reward, agent_a_persona_reward], axis=2)
-                # view as a whole
-                history_reward = history_reward.reshape((batch_size, -1))
-                discount_rewards = []
-
-                dialog_size = len(history_reward[0])
-                # reward of each step
-                step_reward = np.array([0.0 for _ in range(batch_size)])
-                for i in reversed(range(dialog_size)):
-                    r = history_reward[:, i]
-                    step_reward = r + discount_gamma * step_reward
-                    discount_rewards.insert(0, step_reward)
-                # persona rewards reallocate
-                discount_rewards = np.array(discount_rewards)
-                # discount_rewards as step_size x batch_size
-                discount_rewards = np.transpose(discount_rewards)
-                discount_rewards = discount_rewards.reshape((batch_size, turn_size, 2))
-
-                agent_a_persona_reward = discount_rewards[:, :, 0]
-                agent_b_persona_reward = discount_rewards[:, :, 1]
-
-                if not agents[0].is_first_speaker:
-                    # reverse
-                    agent_a_persona_reward, agent_b_persona_reward = agent_b_persona_reward, agent_a_persona_reward
-
-            agent_person_reward = np.concatenate([agent_a_persona_reward, agent_b_persona_reward], axis=1)
-            # min-max normalization
-            min_persona_reward = agent_person_reward.min()
-            max_persona_reward = agent_person_reward.max()
-            diff_reward = max_persona_reward - min_persona_reward + 1e-6
-            agent_person_reward = 2 * (agent_person_reward - min_persona_reward) / diff_reward
-            turn_size = agent_a_persona_reward.shape[1]
-            agent_a_persona_reward = agent_person_reward[:, :turn_size]
-            agent_b_persona_reward = agent_person_reward[:, turn_size:]
-
-            # define information penalty
-            if agents[0].is_first_speaker:
-                information_agent = torch.stack((vt_persona_agent_a, vt_persona_agent_b), dim=2)
-            else:
-                information_agent = torch.stack((vt_persona_agent_b, vt_persona_agent_a), dim=2)
-
-            information_agent = information_agent.view(batch_size, turn_size * 2, -1)
-            information_agent_penalty = information_penalty(information_agent)
-            information_agent_penalty = information_agent_penalty.view(batch_size, 2, turn_size).data.cpu().numpy()
-            information_penalty_a = information_agent_penalty[:, 0, :]
-            information_penalty_b = information_agent_penalty[:, 1, :]
-
-            if not agents[0].is_first_speaker:
-                information_penalty_a, information_penalty_b = information_penalty_b, information_penalty_a
-            # as one score or multi score
-            reward_a_list = 0.1 * agent_a_coherent_reward + 0.5 * agent_a_persona_reward + 0.5 * agent_a_language_reward - 0.1 * information_penalty_a
-            reward_b_list = 0.1 * agent_b_coherent_reward + 0.5 * agent_b_persona_reward + 0.5 * agent_b_language_reward - 0.1 * information_penalty_b
-
-            # subtract running average
-            reward_a_baseline = reward_a_list.mean(axis=0, keepdims=True)
-            reward_a_list = reward_a_list - reward_a_baseline
-
-            reward_b_baseline = reward_b_list.mean(axis=0, keepdims=True)
-            reward_b_list = reward_b_list - reward_b_baseline
+            # # get batch size
+            # batch_size = vt_persona_agent_a.size(0)
+            #
+            # persona_agent_a = persona_agent_a.unsqueeze(dim=0).repeat(batch_size, 1, 1)
+            # persona_agent_b = persona_agent_b.unsqueeze(dim=0).repeat(batch_size, 1, 1)
+            #
+            # agent_a_persona_reward = agents[0].measure_persona_similarity(vt_persona_agent_a, persona_agent_a)
+            # agent_b_persona_reward = agents[1].measure_persona_similarity(vt_persona_agent_b, persona_agent_b)
+            #
+            # turn_size = agent_a_persona_reward.shape[1]
+            #
+            # # delayed reward
+            # discount_gamma = 0.5
+            #
+            # if discount_gamma > 0:
+            #     # use first second to reorder
+            #     if agents[0].is_first_speaker:
+            #         history_reward = np.stack([agent_a_persona_reward, agent_b_persona_reward], axis=2)
+            #     else:
+            #         history_reward = np.stack([agent_b_persona_reward, agent_a_persona_reward], axis=2)
+            #     # view as a whole
+            #     history_reward = history_reward.reshape((batch_size, -1))
+            #     discount_rewards = []
+            #
+            #     dialog_size = len(history_reward[0])
+            #     # reward of each step
+            #     step_reward = np.array([0.0 for _ in range(batch_size)])
+            #     for i in reversed(range(dialog_size)):
+            #         r = history_reward[:, i]
+            #         step_reward = r + discount_gamma * step_reward
+            #         discount_rewards.insert(0, step_reward)
+            #     # persona rewards reallocate
+            #     discount_rewards = np.array(discount_rewards)
+            #     # discount_rewards as step_size x batch_size
+            #     discount_rewards = np.transpose(discount_rewards)
+            #     discount_rewards = discount_rewards.reshape((batch_size, turn_size, 2))
+            #
+            #     agent_a_persona_reward = discount_rewards[:, :, 0]
+            #     agent_b_persona_reward = discount_rewards[:, :, 1]
+            #
+            #     if not agents[0].is_first_speaker:
+            #         # reverse
+            #         agent_a_persona_reward, agent_b_persona_reward = agent_b_persona_reward, agent_a_persona_reward
+            #
+            # agent_person_reward = np.concatenate([agent_a_persona_reward, agent_b_persona_reward], axis=1)
+            # # min-max normalization
+            # min_persona_reward = agent_person_reward.min()
+            # max_persona_reward = agent_person_reward.max()
+            # diff_reward = max_persona_reward - min_persona_reward + 1e-6
+            # agent_person_reward = 2 * (agent_person_reward - min_persona_reward) / diff_reward
+            # turn_size = agent_a_persona_reward.shape[1]
+            # agent_a_persona_reward = agent_person_reward[:, :turn_size]
+            # agent_b_persona_reward = agent_person_reward[:, turn_size:]
+            #
+            # # define information penalty
+            # if agents[0].is_first_speaker:
+            #     information_agent = torch.stack((vt_persona_agent_a, vt_persona_agent_b), dim=2)
+            # else:
+            #     information_agent = torch.stack((vt_persona_agent_b, vt_persona_agent_a), dim=2)
+            #
+            # information_agent = information_agent.view(batch_size, turn_size * 2, -1)
+            # information_agent_penalty = information_penalty(information_agent)
+            # information_agent_penalty = information_agent_penalty.view(batch_size, 2, turn_size).data.cpu().numpy()
+            # information_penalty_a = information_agent_penalty[:, 0, :]
+            # information_penalty_b = information_agent_penalty[:, 1, :]
+            #
+            # if not agents[0].is_first_speaker:
+            #     information_penalty_a, information_penalty_b = information_penalty_b, information_penalty_a
+            # # as one score or multi score
+            # reward_a_list = 0.1 * agent_a_coherent_reward + 0.5 * agent_a_persona_reward + 0.5 * agent_a_language_reward - 0.1 * information_penalty_a
+            # reward_b_list = 0.1 * agent_b_coherent_reward + 0.5 * agent_b_persona_reward + 0.5 * agent_b_language_reward - 0.1 * information_penalty_b
+            #
+            # # subtract running average
+            # reward_a_baseline = reward_a_list.mean(axis=0, keepdims=True)
+            # reward_a_list = reward_a_list - reward_a_baseline
+            #
+            # reward_b_baseline = reward_b_list.mean(axis=0, keepdims=True)
+            # reward_b_list = reward_b_list - reward_b_baseline
 
             if is_display:
                 print('---------------- Reward A ------------------')
-                print('coherent : {}'.format(agent_a_coherent_reward[0]))
-                print('language : {}'.format(agent_a_language_reward[0]))
-                print('persona  : {}'.format(agent_a_persona_reward[0]))
-                print('penalty  : {}'.format(information_penalty_a[0]))
-                print('---------------- Reward B ------------------')
-                print('coherent : {}'.format(agent_b_coherent_reward[0]))
-                print('language : {}'.format(agent_b_language_reward[0]))
-                print('persona  : {}'.format(agent_b_persona_reward[0]))
-                print('penalty  : {}'.format(information_penalty_b[0]))
+                print('finding_commmon_ground_reward : {}'.format(agent_a_fcg_reward[0]))
+                # print('coherent : {}'.format(agent_a_coherent_reward[0]))
+                # print('language : {}'.format(agent_a_language_reward[0]))
+                # print('persona  : {}'.format(agent_a_persona_reward[0]))
+                # print('penalty  : {}'.format(information_penalty_a[0]))
+                # print('---------------- Reward B ------------------')
+                # print('coherent : {}'.format(agent_b_coherent_reward[0]))
+                # print('language : {}'.format(agent_b_language_reward[0]))
+                # print('persona  : {}'.format(agent_b_persona_reward[0]))
+                # print('penalty  : {}'.format(information_penalty_b[0]))
 
             # Send end signal to agent a and agent b
             # Here reward is defined as a list, not a log probability
             obs_end_a = [{'id': agents[0].id, 'episode_done': True, 'reward': reward_a} for reward_a in reward_a_list]
-            obs_end_b = [{'id': agents[1].id, 'episode_done': True, 'reward': reward_b} for reward_b in reward_b_list]
+            obs_end_b = [{'id': agents[1].id, 'episode_done': True, 'reward': reward_b} for reward_b in reward_a_list]
             agents[0].observe(obs_end_a)
             agents[1].observe(obs_end_b)
 

@@ -14,8 +14,11 @@ from scripts.train_model_selfplay import setup_args as setup_args_dict, TrainLoo
 #  within less than 24GB memory.
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 
-IS_ORIGINAL = False
-
+IS_ORIGINAL = True
+NAME = "pegg-o"
+GEN, GATE, CLS = 1, 1, 0.3
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/1103a'
+DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 def set_seed(seed=1):
     torch.manual_seed(seed)
@@ -28,12 +31,12 @@ def setup_args():
     decode_max_seq_len = 32
 
     if not IS_ORIGINAL:
-        receiver_basic = 'receiver_revised'
+        # receiver_basic = 'receiver_revised'
         transmitter_basic = 'transmitter_revised'
         exp_task = 'tasks.convai2.agents:OriginalTeacher,tasks.convai2.agents:OriginalPersonaTeacher'
         exp_eval_task = 'tasks.convai2transmitter.agents:SelfOriginalTeacher:no_cands'
     else:
-        receiver_basic = 'receiver_original'
+        # receiver_basic = 'receiver_original'
         transmitter_basic = 'transmitter_original'
         exp_task = 'tasks.convai2.agents:RevisedTeacher,tasks.convai2.agents:RevisedPersonaTeacher'
         exp_eval_task = 'tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands'
@@ -44,9 +47,11 @@ def setup_args():
 
     # exp_name = 'DEBUG'
     parser.set_defaults(
+        download_path='{}/downloads'.format(DATA_DIR),
+        datapath=DATA_DIR,
         exp=exp_name,  # name for experiment
         task=exp_task,
-        personapath='./tmp/data/',
+        personapath=MODEL_DIR,
         max_turn=3,
         evaltask=exp_eval_task,
         # TODO: now we must keep batch size equal because the world share the same agent
@@ -61,7 +66,7 @@ def setup_args():
         history_replies='label_else_model',
         # model configuration
         model='agents.psquare.psquare:PSquareAgent',
-        model_file='./tmp/psquare/{}.model'.format(exp_name),
+        model_file='{}/psquare/{}.model'.format(MODEL_DIR, exp_name),
         lr=1e-6,
         gpt_lr=1e-6,
         # world sample configuration
@@ -71,7 +76,7 @@ def setup_args():
         encode_max_seq_len=encode_max_seq_len,
         decode_max_seq_len=decode_max_seq_len,
         # transmitter initialization
-        init_model_transmitter='./tmp/transmitter/{}.model'.format(transmitter_basic),
+        init_model_transmitter='{}/transmitter/{}.model'.format(MODEL_DIR, transmitter_basic),
         rnn_class_transmitter='lstm',
         lookuptable_transmitter='enc_dec',
         embedding_type_transmitter='glove_fixed',
@@ -80,7 +85,7 @@ def setup_args():
         model_receiver='agents.receiver.receiver:ReceiverAgent',
         init_model_receiver='./tmp/receiver/{}.model'.format(receiver_basic),
         # language model configuration
-        init_model_coherent='./tmp/transmitter/{}.model'.format(transmitter_basic),
+        init_model_coherent='{}/transmitter/{}.model'.format(MODEL_DIR, transmitter_basic),
         # validation configuration
         validation_max_exs=validation_max,  # -1
         validation_every_n_secs=3600,  # 90

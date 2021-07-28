@@ -23,10 +23,12 @@ from agents.transmitter.gpt.optim import GPTOptimizer
 from torch import autograd
 import json
 from agents.psquare.utils import LanguageModel
-from idea import prepare_example_persona_kws, prepare_example_for_kw_model
-from idea import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model, inputs_for_gate_module
+from idea import prepare_example_persona_kws, prepare_example_for_kw_model, extract_keywords
+from idea import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model
 from idea import kw_word_map, get_keyword_mask_matrix, get_kw_graph_distance_matrix
 from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs
+from idea import cal_finding_common_ground_score
+import torch.nn as nn
 
 task_key_word = 'OriginalPersonaTeacher'
 
@@ -356,8 +358,8 @@ class PSquareAgent(Agent):
             self.transmitter = shared['transmitter']
             self.metrics = shared['metrics']
             # TODO: share status
-            self.receiver = shared['receiver']
-            self.receiver_dict = shared['receiver_dict']
+            # self.receiver = shared['receiver']
+            # self.receiver_dict = shared['receiver_dict']
             # language model to score
             self.coherent_model = shared['coherent_model']
             self.language_model = shared['language_model']
@@ -448,7 +450,7 @@ class PSquareAgent(Agent):
 
             self.coherent_model = coherent_gpt_model
 
-            self.receiver, self.receiver_dict = _init_receiver(opt)
+            # self.receiver, self.receiver_dict = _init_receiver(opt)
 
             if language_status:
                 self.coherent_model.load_state_dict(language_status['model'])
@@ -558,8 +560,8 @@ class PSquareAgent(Agent):
         shared['states'] = {  # don't share optimizer states
             'optimizer_type': self.opt.get('optimizer', None),
         }
-        shared['receiver'] = self.receiver
-        shared['receiver_dict'] = self.receiver_dict
+        # shared['receiver'] = self.receiver
+        # shared['receiver_dict'] = self.receiver_dict
         shared['coherent_model'] = self.coherent_model
         shared['language_model'] = self.language_model
         return shared
@@ -726,26 +728,27 @@ class PSquareAgent(Agent):
                     # TODO: drop the old method to encode persona, we use the separate encoder to do that.
 
                     # idea interface
-                    if self.answers[0] is not None:
+                    # if self.answers[0] is not None:
+                    #     if self.use_talk_tokens:
+                    #         # idea modified ob['text'] = SpecialToken.talk_1_start + ' ' + text_split[-1] + ' ' + SpecialToken.talk_1_end
+                    #         ob['text'] = SpecialToken.talk_1_start + ' ' + self.answers[
+                    #             ob_ind] + ' ' + SpecialToken.talk_1_end
+                    #     else:
+                    #         ob['text'] = self.answers[ob_ind]
+                    # else:
+                    if text_split[-1].startswith('your persona') or text_split[-1].startswith('partner\'s persona'):
+                        ob['text'] = None
+                    else:
                         if self.use_talk_tokens:
-                            # idea modified ob['text'] = SpecialToken.talk_1_start + ' ' + text_split[-1] + ' ' + SpecialToken.talk_1_end
-                            ob['text'] = SpecialToken.talk_1_start + ' ' + self.answers[
-                                ob_ind] + ' ' + SpecialToken.talk_1_end
+                            ob['text'] = SpecialToken.talk_1_start + ' ' + text_split[
+                                -1] + ' ' + SpecialToken.talk_1_end
                         else:
                             ob['text'] = self.answers[ob_ind]
-                    else:
-                        if text_split[-1].startswith('your persona') or text_split[-1].startswith('partner\'s persona'):
-                            ob['text'] = None
-                        else:
-                            if self.use_talk_tokens:
-                                ob['text'] = SpecialToken.talk_1_start + ' ' + text_split[-1] + ' ' + SpecialToken.talk_1_end
-                            else:
-                                ob['text'] = self.answers[ob_ind]
 
                     if persona_given != '':
-                        self.persona_receiver = ' '.join([' ' + text.strip() + ' ' + self.receiver_dict.end_token
-                                                          for text in persona_given.split('\n')
-                                                          if text != ''])
+                        # self.persona_receiver = ' '.join([' ' + text.strip() + ' ' + self.receiver_dict.end_token
+                        #                                   for text in persona_given.split('\n')
+                        #                                   if text != ''])
                         split_persona = persona_given.split('\n')
                         persona_text = ' '.join(split_persona)
                         if self.use_person_tokens:
@@ -760,7 +763,7 @@ class PSquareAgent(Agent):
                     else:
                         message = None
 
-                    ob['kw_model'] = prepare_example_for_kw_model(message, self.answers[ob_ind], self.dict)
+                    ob['kw_model'] = prepare_example_for_kw_model(message, text_split[-1], self.dict)
 
             for ob_ind, ob in enumerate(obs):
                 ob['text2vec'], ob['dis2vec'], ob['turn2vec'], ob['cur_turn'] = maintain_dialog_history(
@@ -770,8 +773,8 @@ class PSquareAgent(Agent):
                     use_reply=self.use_history_reply,
                     persona_append_strategy=self.persona_append_strategy,
                     history_append_strategy=self.history_append_strategy,
-                    receiver=self.receiver,
-                    receiver_dict=self.receiver_dict,
+                    # receiver=self.receiver,
+                    # receiver_dict=self.receiver_dict,
                     use_persona_tokens=self.use_person_tokens,
                     shuffle_persona=self.is_training and self.shuffle_persona,
                     dict=self.dict)
@@ -905,7 +908,12 @@ class PSquareAgent(Agent):
                                                src_seq_dis=src_seq_dis,
                                                rank_during_training=cands is not None,
                                                cands=cands,
-                                               valid_cands=valid_cands)
+                                               valid_cands=valid_cands,
+                                               jump_probs=jump_probs,
+                                               walk_probs=walk_probs,
+                                               hybrid_weights=hybrid_weights,
+                                               vocab_map=self.vocab_map,
+                                               kw_hidden_states=kw_hidden_states)
                 predictions, cand_preds = out[0], out[2]
                 if tgt_seq is not None:
                     # calculate loss on targets
@@ -915,12 +923,19 @@ class PSquareAgent(Agent):
                                            tgt_seq=tgt_seq,
                                            tgt_seq_turn=tgt_seq_turn,
                                            cands=cands,
-                                           valid_cands=valid_cands)
-                    scores = out[1]
-                    loss = self.criterion(scores, tgt_seq)
+                                           valid_cands=valid_cands,
+                                           jump_probs=jump_probs,
+                                           walk_probs=walk_probs,
+                                           hybrid_weights=hybrid_weights,
+                                           vocab_map=self.vocab_map)
+                    # scores = out[1]
+                    # loss = self.criterion(scores, tgt_seq)
+                    hybrid_probs = out[1]
+                    gen_loss_fn = nn.NLLLoss(ignore_index=0, reduction='sum')
+                    gen_loss = gen_loss_fn(hybrid_probs.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
                     # save loss to metrics
                     target_tokens = tgt_seq.ne(self.NULL_IDX).long().sum().item()
-                    self.metrics['loss'] += loss.item()
+                    self.metrics['loss'] += gen_loss.item()
                     self.metrics['num_tokens'] += target_tokens
         # gpu_tracker.track()
         torch.cuda.empty_cache()
@@ -1135,6 +1150,21 @@ class PSquareAgent(Agent):
         scores = scores.data.cpu().numpy()
         scores = np.nan_to_num(scores)
         return scores
+
+    def finding_common_ground_score(self, partner_persona):
+        receive_messages_list = deepcopy(self.receive_messages)
+        send_messages_list = deepcopy(self.send_messages)
+
+        ## remove the <end> from message for later robust splitting
+        receive_messages_list = [[message.replace(self.dict.end_token, '') for message in interaction]
+                                 for interaction in receive_messages_list]
+        send_messages_list = [[message.replace(self.dict.end_token, '') for message in interaction]
+                              for interaction in send_messages_list]
+
+        scores = cal_finding_common_ground_score(send_messages_list, receive_messages_list,
+                                                 self.persona_transmitter, partner_persona,
+                                                 self.kw_graph_distance_matrix)
+        return scores.cpu().numpy()
 
     def load(self, path, override=True):
         """Return opt and model states."""

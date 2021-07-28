@@ -26,7 +26,7 @@ def prepare_example_persona_kws(history, persona_str):
     if history and 'persona_kws' in history:
         return history['persona_kws']
     else:
-        return extract_keywords(persona_str, keyword2id, 30)
+        return extract_keywords(persona_str, 30)
 
 
 def prepare_batch_persona_kw_mask(obs, device):
@@ -38,12 +38,13 @@ def prepare_batch_persona_kw_mask(obs, device):
 
 
 def get_kw_graph_distance_matrix(path, device):
-    kw_graph_distance_matrix = np.ones((len(keyword2id), len(keyword2id))) * 1000
+    kw_graph_distance_matrix = np.ones((len(keyword2id), len(keyword2id))) * -1
     kw_graph_distance_dict = load_pickle(path)
     for node1, node2 in kw_graph_distance_dict.keys():
         kw_graph_distance_matrix[keyword2id[node1], keyword2id[node2]] = kw_graph_distance_dict[(node1, node2)]
-
-    kw_graph_distance_matrix[np.isinf(kw_graph_distance_matrix)] = 1000
+    kw_graph_distance_matrix[np.isinf(kw_graph_distance_matrix)] = -1.
+    max_dist = np.max(kw_graph_distance_matrix)
+    kw_graph_distance_matrix = np.where(kw_graph_distance_matrix == -1, max_dist, kw_graph_distance_matrix)
     return torch.from_numpy(kw_graph_distance_matrix).to(device)
 
 
@@ -78,6 +79,83 @@ def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax):
     logits = walk_logits(neighbor_filter)
     probs = softmax(logits)
     return probs
+
+
+def cal_final_reward(fcg_score):
+    batch_size = fcg_score.shape[0]
+    turn_size = fcg_score.shape[1]
+
+    # delayed reward
+    discount_gamma = 0.5
+
+    if discount_gamma > 0:
+
+        history_reward = fcg_score
+        discount_rewards = []
+
+        # reward of each step
+        step_reward = np.array([0.0 for _ in range(batch_size)])
+        for i in reversed(range(turn_size)):
+            r = history_reward[:, i]
+            step_reward = r + discount_gamma * step_reward
+            discount_rewards.insert(0, step_reward)
+        discount_rewards = np.array(discount_rewards)
+        discount_rewards = np.transpose(discount_rewards)
+
+    # min-max normalization
+    min_reward = discount_rewards.min()
+    max_reward = discount_rewards.max()
+    diff_reward = max_reward - min_reward + 1e-6
+    # scale to [0, 2]
+    normalized_reward = 2 * (discount_rewards - min_reward) / diff_reward
+
+    # subtract running average
+    reward_a_baseline = normalized_reward.mean(axis=0, keepdims=True)
+    reward_a_list = normalized_reward - reward_a_baseline
+
+    return reward_a_list
+
+def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
+                                    trainer_persona, partner_persona, kw_graph_distance_matrix):
+    # calulate persona ground
+    both_persona_str = trainer_persona + ' ' + partner_persona
+    persona_concepts = extract_keywords(both_persona_str, 50)
+    persona_ground = torch.scatter(input=torch.zeros(2680), dim=-1, index=torch.tensor(persona_concepts),
+                                   src=torch.ones_like(torch.tensor(persona_concepts, dtype=torch.float)))
+    persona_ground[0] = 0
+    persona_ground = persona_ground.type(dtype=torch.bool)
+    num_persona_ground_concepts = persona_ground.sum().item()
+
+    batch_size = len(send_messages_list[0])
+    num_turn = len(send_messages_list)
+
+    # calculate common ground
+    common_grounds = [[[] for _ in range(num_turn)] for _ in range(batch_size)]
+    num_common_ground_concepts = [[0 for _ in range(num_turn)] for _ in range(batch_size)]
+    for idx_turn, receive_messages, send_messages in zip(range(num_turn), receive_messages_list,
+                                                         send_messages_list):
+        for idx_batch, receive_message, send_message in zip(range(batch_size), receive_messages, send_messages):
+            concepts = extract_keywords(send_message + ' ' + receive_message, 50)
+            common_ground = torch.scatter(input=torch.zeros(2680), dim=-1,
+                                          index=torch.tensor(concepts),
+                                          src=torch.ones_like(
+                                              torch.tensor(concepts, dtype=torch.float)))
+
+            # if no concept, then the common_ground_one_turn[0] will be scattered by 1.
+            if have_concepts_in(common_ground):
+                common_ground[0] = 0
+            num_common_ground_concepts[idx_batch][idx_turn] += common_ground.sum().item()
+            common_grounds[idx_batch][idx_turn] += common_ground.tolist()
+
+    common_grounds = torch.tensor(common_grounds, dtype=torch.bool)
+    num_common_ground_concepts = torch.tensor(num_common_ground_concepts)
+    concepts2persona_ground = (kw_graph_distance_matrix * persona_ground).sum(-1) / num_persona_ground_concepts
+    fcg_rewards = (common_grounds * concepts2persona_ground).sum(-1) / num_common_ground_concepts
+    return fcg_rewards.reciprocal()
+
+
+def have_concepts_in(common_ground_one_turn):
+    return common_ground_one_turn.sum() > 1
 
 
 def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax):
@@ -160,7 +238,7 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
 ## one example for kw model
 def prepare_example_for_kw_model(history, text, dict):
     context, last_two_utters = process_context(history, text, dict)
-    last_two_utters_keywords = extract_keywords(context, keyword2id, 20)
+    last_two_utters_keywords = extract_keywords(context, 20)
     last_two_utters_concepts = extract_concepts(context, node2id, 30, dict)
     return last_two_utters, last_two_utters_keywords, last_two_utters_concepts
 
@@ -247,7 +325,7 @@ def process_context(history, text, dict):
     return context, [minus_two, minus_one]
 
 
-def extract_keywords(context, keyword2id, max_sent_len):
+def extract_keywords(context, max_sent_len):
     simple_tokens = kw_tokenize(context)
     utter_keywords = [keyword2id[w] for w in simple_tokens if w in keyword2id]
     utter_keywords = pad_sentence(utter_keywords, max_sent_len, keyword2id["<pad>"])
