@@ -807,7 +807,7 @@ class TransformerAgent(Agent):
                                      kw_hidden_states=kw_hidden_states)
             predictions, cand_preds = out[0], out[2]  # 生成example过程
 
-            if tgt_seq is not None:
+            if tgt_seq is not None and self.rank is False:
                 # calculate loss on targets
                 out = self.model.forward(src_seq=src_seq,
                                          src_seq_turn=src_seq_turn,
