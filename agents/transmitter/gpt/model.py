@@ -160,7 +160,7 @@ class Gpt2SeqModel(nn.Module):
             elif self.beam_size > 1:
                 # idea interface: modified
                 predictions, hidden_states = self.beam_search(batch_size, prior_context, walk_probs, jump_probs,
-                                                              hybrid_weights, vocab_map, kw_hidden_states)
+                                                              hybrid_weights, vocab_map)
                 gate = None
 
 
@@ -206,10 +206,16 @@ class Gpt2SeqModel(nn.Module):
                         # TODO: note the candidate doesn't own a END symbol,
                         #  so we ignore the score form last word -> EOS and EOS -> pad
                         cand_logits = cand_logits[..., src_seq_len:-1, :].contiguous()
+                        gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
+                        lm_probs = self.softmax(cand_logits)
+                        hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs,
+                                                        gate, self.softmax, lm_mask=None)
+                        hybrid_probs = hybrid_probs.clamp(min=1e-6)
                         # TODO: start -> I, I -> love, ... the -> world, [world -> EOS] (missing here), target is the
                         #  original sentence
                         cand_label = current_cs
-                        true_score = F.log_softmax(cand_logits, dim=2).gather(2, cand_label.unsqueeze(2))
+                        true_score = hybrid_probs.log().gather(2, cand_label.unsqueeze(2))
+                        # true_score = F.log_softmax(cand_logits, dim=2).gather(2, cand_label.unsqueeze(2))
                         nonzero = current_cs.ne(self.pad_idx).float()
                         current_cs_score = (true_score.squeeze(2) * nonzero).sum(1)
                         current_cs_lens = nonzero.sum(1)
@@ -219,8 +225,9 @@ class Gpt2SeqModel(nn.Module):
                         current_cs_valid_len = current_cs_valid_len.unsqueeze(dim=2).repeat(1, 1, 768)
                         last_state = hidden_states.gather(dim=1, index=current_cs_valid_len).squeeze(dim=1)
                         # 1 is pos, 0 is neg
-                        current_rank_score = F.softmax(self.linear(last_state), dim=1)[:, 1]
-                        current_cs_score = 1.0 * current_rank_score
+                        # idea: drop
+                        # current_rank_score = F.softmax(self.linear(last_state), dim=1)[:, 1]
+                        # current_cs_score = 1.0 * current_rank_score
                         cand_scores.append(current_cs_score.view(1, -1))
 
                     cand_scores = torch.cat(cand_scores, dim=0)
@@ -457,8 +464,7 @@ class Gpt2SeqModel(nn.Module):
         pred_output = pred_output[..., :score_output.shape[1]].contiguous()
         return pred_output, hybrid_probs, hidden_states
 
-    def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights, vocab_map,
-                    kw_hidden_states):
+    def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights, vocab_map):
         """
         beam search for the validating generation. Note we also impose the n-gram repeating, which is borrowed
         from https://github.com/pytorch/fairseq. The diversity is not useful here.

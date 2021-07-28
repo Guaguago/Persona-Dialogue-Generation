@@ -173,7 +173,7 @@ def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs
     assert len(gate.size()) == 3
     assert len(lm_probs.size()) == 3
     kw_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk']).unsqueeze(
-        1).expand(-1, lm_probs.size(1), -1)
+        1).expand(lm_probs.size(0), lm_probs.size(1), -1)
 
     revert_logits = kw_probs.logit()
     revert_logits = top_k_logits(revert_logits, 10)
