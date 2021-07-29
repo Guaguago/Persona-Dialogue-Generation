@@ -16,8 +16,9 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 
 IS_ORIGINAL = True
 NAME = "pegg-o"
-GEN, GATE, CLS = 0.7, 0.2, 0.1
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/72182f'
+GEN, GATE, CLS = 0.6, 0.2, 0.1
+HYBRID = {'walk': 0.8, 'jump': 0.2}
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/62182'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 
@@ -48,6 +49,8 @@ def setup_args():
 
     # exp_name = 'DEBUG'
     parser.set_defaults(
+        # idea add
+        hybrid_weights=HYBRID,
         download_path='{}/downloads'.format(DATA_DIR),
         datapath=DATA_DIR,
         exp=exp_name,  # name for experiment
