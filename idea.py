@@ -141,7 +141,7 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
             common_ground = torch.scatter(input=torch.zeros(2680), dim=-1,
                                           index=torch.tensor(concepts).to(device),
                                           src=torch.ones_like(
-                                              torch.tensor(concepts, dtype=torch.float).to(device)))
+                                              torch.tensor(concepts, dtype=torch.float).to(device)).to(device))
 
             # if no concept, then the common_ground_one_turn[0] will be scattered by 1.
             if have_concepts_in(common_ground):
