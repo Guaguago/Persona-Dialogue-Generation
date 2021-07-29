@@ -115,12 +115,14 @@ def cal_final_reward(fcg_score):
 
     return reward_a_list
 
+
 def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
-                                    trainer_persona, partner_persona, kw_graph_distance_matrix):
+                                    trainer_persona, partner_persona, kw_graph_distance_matrix, device):
     # calulate persona ground
     both_persona_str = trainer_persona + ' ' + partner_persona
     persona_concepts = extract_keywords(both_persona_str, 50)
-    persona_ground = torch.scatter(input=torch.zeros(2680), dim=-1, index=torch.tensor(persona_concepts),
+    persona_ground = torch.scatter(input=torch.zeros(2680).to(device), dim=-1,
+                                   index=torch.tensor(persona_concepts).to(device),
                                    src=torch.ones_like(torch.tensor(persona_concepts, dtype=torch.float)))
     persona_ground[0] = 0
     persona_ground = persona_ground.type(dtype=torch.bool)
@@ -147,8 +149,8 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
             num_common_ground_concepts[idx_batch][idx_turn] += common_ground.sum().item()
             common_grounds[idx_batch][idx_turn] += common_ground.tolist()
 
-    common_grounds = torch.tensor(common_grounds, dtype=torch.bool)
-    num_common_ground_concepts = torch.tensor(num_common_ground_concepts)
+    common_grounds = torch.tensor(common_grounds, dtype=torch.bool).to(device)
+    num_common_ground_concepts = torch.tensor(num_common_ground_concepts).to(device)
     concepts2persona_ground = (kw_graph_distance_matrix * persona_ground).sum(-1) / num_persona_ground_concepts
     fcg_rewards = (common_grounds * concepts2persona_ground).sum(-1) / num_common_ground_concepts
     return fcg_rewards.reciprocal()
