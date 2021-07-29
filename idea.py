@@ -123,7 +123,7 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
     persona_concepts = extract_keywords(both_persona_str, 50)
     persona_ground = torch.scatter(input=torch.zeros(2680).to(device), dim=-1,
                                    index=torch.tensor(persona_concepts).to(device),
-                                   src=torch.ones_like(torch.tensor(persona_concepts, dtype=torch.float)))
+                                   src=torch.ones_like(torch.tensor(persona_concepts, dtype=torch.float).to(device)))
     persona_ground[0] = 0
     persona_ground = persona_ground.type(dtype=torch.bool)
     num_persona_ground_concepts = persona_ground.sum().item()
@@ -139,9 +139,9 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
         for idx_batch, receive_message, send_message in zip(range(batch_size), receive_messages, send_messages):
             concepts = extract_keywords(send_message + ' ' + receive_message, 50)
             common_ground = torch.scatter(input=torch.zeros(2680), dim=-1,
-                                          index=torch.tensor(concepts),
+                                          index=torch.tensor(concepts).to(device),
                                           src=torch.ones_like(
-                                              torch.tensor(concepts, dtype=torch.float)))
+                                              torch.tensor(concepts, dtype=torch.float).to(device)))
 
             # if no concept, then the common_ground_one_turn[0] will be scattered by 1.
             if have_concepts_in(common_ground):
