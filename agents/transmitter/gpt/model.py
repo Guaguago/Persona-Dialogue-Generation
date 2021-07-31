@@ -147,14 +147,16 @@ class Gpt2SeqModel(nn.Module):
             else:
                 prior_dis = None
 
-            if sampling:
+            if sampling:  # 2 pegg for A
                 predictions, hybrid_probs, hidden_states = self.sample_decoding(batch_size, prior_context, prior_dis,
                                                                                 self.topk, walk_probs, jump_probs,
                                                                                 hybrid_weights, vocab_map)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
-            elif self.training:
-                predictions, scores, hidden_states = self.train_greedy_decoding(batch_size, prior_context, prior_dis)
+            elif self.training:  # B generate in 2 pegg
+                predictions, hybrid_probs, hidden_states = self.train_greedy_decoding(batch_size, prior_context,
+                                                                                      prior_dis, walk_probs, jump_probs,
+                                                                                      hybrid_weights, vocab_map)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
             elif self.beam_size > 1:
@@ -226,8 +228,8 @@ class Gpt2SeqModel(nn.Module):
                         last_state = hidden_states.gather(dim=1, index=current_cs_valid_len).squeeze(dim=1)
                         # 1 is pos, 0 is neg
                         # idea: drop
-                        # current_rank_score = F.softmax(self.linear(last_state), dim=1)[:, 1]
-                        # current_cs_score = 1.0 * current_rank_score
+                        current_rank_score = F.softmax(self.linear(last_state), dim=1)[:, 1]
+                        current_cs_score = 1.0 * current_rank_score
                         cand_scores.append(current_cs_score.view(1, -1))
 
                     cand_scores = torch.cat(cand_scores, dim=0)
@@ -308,7 +310,8 @@ class Gpt2SeqModel(nn.Module):
                     break
         return pred_output, hidden_states
 
-    def train_greedy_decoding(self, batch_size, prior_context, prior_dis):
+    def train_greedy_decoding(self, batch_size, prior_context, prior_dis,
+                              walk_probs, jump_probs, hybrid_weights, vocab_map):
         """
         This function is used to simulate the User in self-play.
         The only difference between this function with greedy_decoding is that
@@ -330,8 +333,16 @@ class Gpt2SeqModel(nn.Module):
             last_logits = logits
             # logits, _ = self.transformer_module.forward(past)
             logits = logits[:, -1, :] / self.temperature
+
+            lm_probs = self.softmax(logits)
+            gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
+
+            hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs.unsqueeze(1),
+                                            gate.unsqueeze(1), self.softmax)
+            log_probs = hybrid_probs.squeeze(1)
+
             # add score
-            log_probs = F.softmax(logits, dim=-1)
+            # log_probs = F.softmax(logits, dim=-1)
 
             if 0 < self.no_repeat_ngram_size < step:
                 # for each beam and batch sentence, generate a list of previous ngrams

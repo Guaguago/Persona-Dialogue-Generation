@@ -50,7 +50,11 @@ def _init_receiver(opt):
     print('[ Override the GPU ID ... ]')
     # TODO: always assuming the receiver in gpu 1
     opt['override'] = {'gpu': 1,
-                       'dict_file': opt['dict_file']}
+                       'dict_file': opt['dict_file'],
+                       'datapath': './data',
+                       'model_file': './tmp/receiver/receiver_original.model',
+                       'download_path': './download_path'}
+
     if opt.get('init_model') is None:
         raise Exception('Please specify the init_model_receiver!')
     else:
@@ -856,15 +860,19 @@ class PSquareAgent(Agent):
 
                     loss /= target_tokens  # average loss per token
                     loss.backward()
-                elif self.greedy_response is True:
+                elif self.greedy_response is True:  # 2pegg B
                     out = self.transmitter.forward(src_seq=src_seq,
                                                    src_seq_turn=src_seq_turn,
                                                    src_seq_dis=src_seq_dis,
-                                                   sampling=False)
+                                                   sampling=False,
+                                                   walk_probs=walk_probs,
+                                                   jump_probs=jump_probs,
+                                                   hybrid_weights=hybrid_weights,
+                                                   vocab_map=self.vocab_map)
                     # generated response
-                    predictions, scores, cand_preds = out[0], out[1], out[2]
+                    predictions, hybrid_probs, cand_preds = out[0], out[1], out[2]
                     self.metrics['num_selfplay_turns'] += 1
-                else:
+                else:  # 2pegg for A
                     out = self.transmitter.forward(src_seq=src_seq,
                                                    src_seq_turn=src_seq_turn,
                                                    src_seq_dis=src_seq_dis,
