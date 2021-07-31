@@ -23,7 +23,7 @@ from agents.transmitter.gpt.optim import GPTOptimizer
 from torch import autograd
 import json
 from agents.psquare.utils import LanguageModel
-from idea import prepare_example_persona_kws, prepare_example_for_kw_model, extract_keywords
+from idea import prepare_example_persona_kws, prepare_example_for_kw_model
 from idea import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model
 from idea import kw_word_map, get_keyword_mask_matrix, get_kw_graph_distance_matrix
 from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs
@@ -846,10 +846,15 @@ class PSquareAgent(Agent):
                                                    src_seq_turn=src_seq_turn,
                                                    src_seq_dis=src_seq_dis,
                                                    tgt_seq=tgt_seq,
-                                                   tgt_seq_turn=tgt_seq_turn)
-                    predictions, scores, cand_preds = out[0], out[1], out[2]
-                    idx = predictions.unsqueeze(dim=2)
-                    loss = self.criterion(scores, idx)
+                                                   tgt_seq_turn=tgt_seq_turn,
+                                                   jump_probs=jump_probs,
+                                                   walk_probs=walk_probs,
+                                                   vocab_map=self.vocab_map,
+                                                   hybrid_weights=hybrid_weights,
+                                                   kw_hidden_states=kw_hidden_states)
+                    predictions, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
+                    # idx = predictions.unsqueeze(dim=2)
+                    # loss = self.criterion(scores, idx)
 
                     # calculate gradient
                     y_ne = tgt_seq.ne(self.NULL_IDX)
@@ -858,8 +863,11 @@ class PSquareAgent(Agent):
                     self.metrics['num_tokens'] += target_tokens
                     self.metrics['correct_tokens'] += correct
 
-                    loss /= target_tokens  # average loss per token
-                    loss.backward()
+                    gen_loss_fn = nn.NLLLoss(ignore_index=0, reduction='mean')
+                    gen_loss = gen_loss_fn(hybrid_probs.log().view(-1, hybrid_probs.size(-1)), tgt_seq.view(-1))
+
+                    # loss /= target_tokens  # average loss per token
+                    gen_loss.backward()
                 elif self.greedy_response is True:  # 2pegg B
                     out = self.transmitter.forward(src_seq=src_seq,
                                                    src_seq_turn=src_seq_turn,

@@ -128,7 +128,7 @@ class Gpt2SeqModel(nn.Module):
             last_state = hidden_states.gather(dim=1, index=pos_seq_len_expand).squeeze(dim=1)
             positive_score = self.linear(self.dropout(last_state))
 
-            predictions = None
+            predictions = hybrid_probs.argmax(dim=-1)
             # predictions = shift_logits.argmax(dim=-1)
         else:
             prior_context = torch.cat([src_seq, start_tensor], dim=1)

@@ -746,8 +746,7 @@ class TransformerAgent(Agent):
                                          jump_probs=jump_probs,
                                          walk_probs=walk_probs,
                                          vocab_map=self.vocab_map,
-                                         hybrid_weights=hybrid_weights,
-                                         kw_hidden_states=kw_hidden_states)
+                                         hybrid_weights=hybrid_weights)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 
