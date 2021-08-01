@@ -159,13 +159,15 @@ def have_concepts_in(common_ground_one_turn):
     return common_ground_one_turn.sum() > 1
 
 
-def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax):
+def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     num_persona_kw = persona_kws.sum(-1)
     has_persona_kws = num_persona_kw.clamp(0, 1).unsqueeze(1).expand(-1, len(keyword2id))
     sum_logits = (kw_graph_distance_matrix * (persona_kws.unsqueeze(1))).sum(-1)
-    mean_logits = sum_logits / num_persona_kw.unsqueeze(1)
+    mean_logits = sum_logits / num_persona_kw.unsqueeze(1).clamp(min=1e-6)
+    # logits = mean_logits.clamp(min=1e-6).reciprocal()
     logits = (mean_logits + (1 - has_persona_kws)).reciprocal()
-    probs = softmax(logits / 0.05)
+    logits = top_k_logits(logits, topk)
+    probs = softmax(logits)
     return probs
 
 
