@@ -14,11 +14,12 @@ from agents.transmitter.transmitter import ARCH_CHOICE
 from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 
 # if is original, train model on original data; otherwise on revised data.
+MODEL = 'psquare'
 NAME = "pegg-o"
 IS_ORIGINAL = True
-GEN, GATE, CLS = 1, 1, 0.3
-HYBRID = {'walk': 0.3, 'jump': 0.7}
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/110337'
+GEN, GATE, CLS = 0.6, 0.2, 0.1
+HYBRID = {'walk': 0.2, 'jump': 0.8}
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/62128'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 
@@ -91,7 +92,7 @@ def setup_args():
         cls_weight=CLS,
         datapath=DATA_DIR,
         hybrid_weights=HYBRID,
-        model_file='{}/transmitter/{}.model'.format(MODEL_DIR, exp_name),
+        model_file='{}/{}/{}.model'.format(MODEL_DIR, MODEL, exp_name),
         dict_tokenizer='split',
         datatype='train',
         gpt_lr=6.25e-5,
