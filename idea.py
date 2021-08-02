@@ -192,6 +192,27 @@ def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs
         lm_mask=lm_mask,
     )
 
+    n1 = torch.isinf(hybrid_probs).sum()
+    n2 = torch.isnan(hybrid_probs).sum()
+    n3 = (hybrid_probs < 0).sum()
+
+    if n1 > 0 or n2 > 0 or n3 > 0:
+        print('The num of inf in hybrid_probs: {}'.format(torch.isinf(hybrid_probs).sum()))
+        print('The num of nan in hybrid_probs: {}'.format(torch.isnan(hybrid_probs).sum()))
+        print('The num of negative in hybrid_probs: {}'.format((hybrid_probs < 0).sum()))
+        print('The num of inf in walk_probs: {}'.format(torch.isinf(walk_probs).sum()))
+        print('The num of nan in walk_probs: {}'.format(torch.isnan(walk_probs).sum()))
+        print('The num of negative in walk_probs: {}'.format((walk_probs < 0).sum()))
+        print('The num of inf in jump_probs: {}'.format(torch.isinf(jump_probs).sum()))
+        print('The num of nan in jump_probs: {}'.format(torch.isnan(jump_probs).sum()))
+        print('The num of negative in lm_probs: {}'.format((lm_probs < 0).sum()))
+        print('The num of inf in lm_probs: {}'.format(torch.isinf(lm_probs).sum()))
+        print('The num of nan in lm_probs: {}'.format(torch.isnan(lm_probs).sum()))
+        print('The num of negative in jump_probs: {}'.format((jump_probs < 0).sum()))
+        print('The num of inf in kw_probs: {}'.format(torch.isinf(kw_probs).sum()))
+        print('The num of nan in kw_probs: {}'.format(torch.isnan(kw_probs).sum()))
+        print('The num of negative in kw_probs: {}'.format((kw_probs < 0).sum()))
+
     return hybrid_probs
 
 
