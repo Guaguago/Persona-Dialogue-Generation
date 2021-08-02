@@ -266,7 +266,7 @@ class TrainLoop():
                     # clear to zero
                     self.train_dis_time.reset()
                 else:
-                    is_display = True
+                    is_display = False
 
                 world.parley_episode(is_training=True, is_display=is_display)
 
