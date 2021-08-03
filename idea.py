@@ -151,8 +151,8 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
     common_grounds = torch.tensor(common_grounds, dtype=torch.bool).to(device)
     num_common_ground_concepts = torch.tensor(num_common_ground_concepts).to(device)
     concepts2persona_ground = (kw_graph_distance_matrix * persona_ground).sum(-1) / num_persona_ground_concepts
-    fcg_rewards = (common_grounds * concepts2persona_ground).sum(-1) / num_common_ground_concepts
-    return fcg_rewards.reciprocal()
+    fcg_precision = (common_grounds * concepts2persona_ground).sum(-1) / num_common_ground_concepts
+    return fcg_precision.reciprocal()
 
 
 def have_concepts_in(common_ground_one_turn):
@@ -168,6 +168,15 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     logits = (mean_logits + (1 - has_persona_kws)).reciprocal()
     logits = top_k_logits(logits, topk)
     probs = softmax(logits)
+
+    nan = probs.isnan().sum()
+    if nan == 0:
+        print('persona_kws topk: {}'.format(persona_kws.topk(10)[0]))
+        print('logits topk: {}'.format(logits.topk(10)[0]))
+        print('probs topk: {}'.format(probs.topk(10)[0]))
+        print('mean_logits topk: {}'.format(mean_logits.topk(10)[0]))
+        print('num_persona_kw: {}'.format(num_persona_kw))
+
     return probs
 
 
