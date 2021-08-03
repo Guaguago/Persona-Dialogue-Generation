@@ -170,7 +170,7 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     probs = softmax(logits)
 
     nan = probs.isnan().sum()
-    if nan == 0:
+    if nan > 0:
         print('persona_kws topk: {}'.format(persona_kws.topk(10)[0]))
         print('logits topk: {}'.format(logits.topk(10)[0]))
         print('probs topk: {}'.format(probs.topk(10)[0]))
