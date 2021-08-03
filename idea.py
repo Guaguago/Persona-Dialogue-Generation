@@ -38,14 +38,20 @@ def prepare_batch_persona_kw_mask(obs, device):
 
 
 def get_kw_graph_distance_matrix(path, device):
-    kw_graph_distance_matrix = np.ones((len(keyword2id), len(keyword2id))) * -1
+    kw_graph_distance_matrix = torch.ones((len(keyword2id), len(keyword2id))).to(device) * -1
     kw_graph_distance_dict = load_pickle(path)
     for node1, node2 in kw_graph_distance_dict.keys():
         kw_graph_distance_matrix[keyword2id[node1], keyword2id[node2]] = kw_graph_distance_dict[(node1, node2)]
-    kw_graph_distance_matrix[np.isinf(kw_graph_distance_matrix)] = -1.
-    max_dist = np.max(kw_graph_distance_matrix)
-    kw_graph_distance_matrix = np.where(kw_graph_distance_matrix == -1, max_dist, kw_graph_distance_matrix)
-    return torch.from_numpy(kw_graph_distance_matrix).to(device)
+    kw_graph_distance_matrix[torch.isinf(kw_graph_distance_matrix)] = -1.
+    max_distance = kw_graph_distance_matrix.max().item()
+    kw_graph_distance_matrix = torch.where(kw_graph_distance_matrix == -1,
+                                           torch.ones_like(kw_graph_distance_matrix) * max_distance,
+                                           kw_graph_distance_matrix)
+    min_distance = kw_graph_distance_matrix.view(-1).topk(2680, largest=False)[0].unique()[1].item()
+    kw_graph_distance_matrix = torch.where(0 == kw_graph_distance_matrix,
+                                           torch.ones_like(kw_graph_distance_matrix) * min_distance,
+                                           kw_graph_distance_matrix)
+    return kw_graph_distance_matrix
 
 
 ## kw model forward
@@ -200,27 +206,6 @@ def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs
         lm_probs=lm_probs,
         lm_mask=lm_mask,
     )
-
-    n1 = torch.isinf(hybrid_probs).sum()
-    n2 = torch.isnan(hybrid_probs).sum()
-    n3 = (hybrid_probs < 0).sum()
-
-    if n1 > 0 or n2 > 0 or n3 > 0:
-        print('The num of inf in hybrid_probs: {}'.format(torch.isinf(hybrid_probs).sum()))
-        print('The num of nan in hybrid_probs: {}'.format(torch.isnan(hybrid_probs).sum()))
-        print('The num of negative in hybrid_probs: {}'.format((hybrid_probs < 0).sum()))
-        print('The num of inf in walk_probs: {}'.format(torch.isinf(walk_probs).sum()))
-        print('The num of nan in walk_probs: {}'.format(torch.isnan(walk_probs).sum()))
-        print('The num of negative in walk_probs: {}'.format((walk_probs < 0).sum()))
-        print('The num of inf in jump_probs: {}'.format(torch.isinf(jump_probs).sum()))
-        print('The num of nan in jump_probs: {}'.format(torch.isnan(jump_probs).sum()))
-        print('The num of negative in lm_probs: {}'.format((lm_probs < 0).sum()))
-        print('The num of inf in lm_probs: {}'.format(torch.isinf(lm_probs).sum()))
-        print('The num of nan in lm_probs: {}'.format(torch.isnan(lm_probs).sum()))
-        print('The num of negative in jump_probs: {}'.format((jump_probs < 0).sum()))
-        print('The num of inf in kw_probs: {}'.format(torch.isinf(kw_probs).sum()))
-        print('The num of nan in kw_probs: {}'.format(torch.isnan(kw_probs).sum()))
-        print('The num of negative in kw_probs: {}'.format((kw_probs < 0).sum()))
 
     return hybrid_probs
 
