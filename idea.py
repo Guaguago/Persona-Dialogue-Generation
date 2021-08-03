@@ -172,6 +172,8 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     mean_logits = sum_logits / num_persona_kw.unsqueeze(1).clamp(min=1e-6)
     # logits = mean_logits.clamp(min=1e-6).reciprocal()
     logits = (mean_logits + (1 - has_persona_kws)).reciprocal()
+
+    # hardly select topk concepts
     logits = top_k_logits(logits, topk)
     probs = softmax(logits)
 
@@ -193,12 +195,12 @@ def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs
     kw_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk']).unsqueeze(
         1).expand(lm_probs.size(0), lm_probs.size(1), -1)
 
-    revert_logits = kw_probs.logit()
-    revert_logits = top_k_logits(revert_logits, 10)
+    # revert_logits = kw_probs.logit()
+    kw_probs = top_k_logits(kw_probs, 5)
     # revert_logits[..., 0] = -1e10
     kw_probs = softmax(
-        revert_logits.gather(-1, vocab_map.unsqueeze(0).unsqueeze(1).expand(
-            lm_probs.size())) / 15)
+        kw_probs.gather(-1, vocab_map.unsqueeze(0).unsqueeze(1).expand(
+            lm_probs.size())))
 
     hybrid_probs = hybrid_kw_and_lm_probs(
         gate=gate,
@@ -441,4 +443,4 @@ def top_k_logits(logits, k):
     else:
         values = torch.topk(logits, k)[0]
         batch_mins = values[..., -1:]
-        return torch.where(logits < batch_mins, torch.ones_like(logits) * -1e10, logits)
+        return torch.where(logits < batch_mins, torch.ones_like(logits) * -1e10, torch.ones_like(logits))

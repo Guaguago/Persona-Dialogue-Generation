@@ -423,10 +423,6 @@ class Gpt2SeqModel(nn.Module):
                 print('Top 10 of logits: {}'.format(logits[0].topk(10)[0]))
                 print('Top 10 of lm_probs: {}'.format(lm_probs[0].topk(10)[0]))
 
-            if step == 0:
-                print('Top 10 of logits: {}'.format(logits[0].topk(10)[0]))
-                print('Top 10 of lm_probs: {}'.format(lm_probs[0].topk(10)[0]))
-
             gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
 
             hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs.unsqueeze(1),
