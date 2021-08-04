@@ -1,9 +1,10 @@
 from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
-NAME = "pegg_o"
+NAME = "pegg-o"
 IS_ORIGINAL = True
-HYBRID = {'walk': 0.3, 'jump': 0.7}
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/11172'
+HYBRID = {'walk': 0.5, 'jump': 0.5}
+
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/11155'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 

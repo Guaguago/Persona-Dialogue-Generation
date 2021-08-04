@@ -210,8 +210,8 @@ class Gpt2SeqModel(nn.Module):
                         cand_logits = cand_logits[..., src_seq_len:-1, :].contiguous()
                         gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
                         lm_probs = self.softmax(cand_logits)
-                        hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs,
-                                                        gate, self.softmax, lm_mask=None)
+                        hybrid_probs = cal_hybrid_probs(walk_probs[ind].unsqueeze(0), jump_probs[ind].unsqueeze(0),
+                                                        hybrid_weights, vocab_map, lm_probs, gate, self.softmax)
                         hybrid_probs = hybrid_probs.clamp(min=1e-6)
                         # TODO: start -> I, I -> love, ... the -> world, [world -> EOS] (missing here), target is the
                         #  original sentence
@@ -264,7 +264,7 @@ class Gpt2SeqModel(nn.Module):
                 # kw_probs = self.softmax(
                 #     kw_probs.gather(-1, vocab_map.unsqueeze(0).expand(lm_probs.size())) / 0.01)
                 hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map,
-                                                 lm_probs.unsqueeze(1), gate.unsqueeze(1), self.softmax, lm_mask=None)
+                                                lm_probs.unsqueeze(1), gate.unsqueeze(1), self.softmax, lm_mask=None)
                 hybrid_probs = hybrid_probs.squeeze(1).clamp(min=1e-6)
                 # hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
                 log_probs = torch.log(hybrid_probs)
