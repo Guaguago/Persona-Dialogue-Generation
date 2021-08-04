@@ -166,9 +166,9 @@ class Gpt2SeqModel(nn.Module):
                 gate = None
 
 
-            else:
+            else:  # hits@1
                 predictions, hidden_states = self.greedy_decoding(batch_size, prior_context, prior_dis, walk_probs,
-                                                                  jump_probs, vocab_map)
+                                                                  hybrid_weights, jump_probs, vocab_map)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
             positive_score = self.linear(hidden_states[:, -1, :])
@@ -241,7 +241,7 @@ class Gpt2SeqModel(nn.Module):
     def _length_penalty(self, sequence_lengths):
         return sequence_lengths
 
-    def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, jump_probs, vocab_map):
+    def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, hybrid_weights, jump_probs, vocab_map):
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
         is_end = torch.zeros(batch_size, dtype=torch.bool, device=device)
@@ -259,12 +259,14 @@ class Gpt2SeqModel(nn.Module):
                 ### idea interface ###
                 lm_probs = self.softmax(logits)
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
-                jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
-                kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
-                kw_probs = self.softmax(
-                    kw_probs.gather(-1, vocab_map.unsqueeze(0).expand(lm_probs.size())) / 0.01)
-
-                hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
+                # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
+                # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
+                # kw_probs = self.softmax(
+                #     kw_probs.gather(-1, vocab_map.unsqueeze(0).expand(lm_probs.size())) / 0.01)
+                hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map,
+                                                 lm_probs.unsqueeze(1), gate.unsqueeze(1), self.softmax, lm_mask=None)
+                hybrid_probs = hybrid_probs.squeeze(1).clamp(min=1e-6)
+                # hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
                 log_probs = torch.log(hybrid_probs)
 
                 if 0 < self.no_repeat_ngram_size < step:

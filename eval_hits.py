@@ -51,8 +51,8 @@ if __name__ == '__main__':
         model='agents.transmitter.transmitter:TransformerAgent',
         init_model_transmitter=model_name,
         gpu=0,
-        batchsize=32,
-        beam_size=2,
+        batchsize=16,
+        beam_size=1,
         rank_candidates=True,
         report_freq=0.0001,
     )
