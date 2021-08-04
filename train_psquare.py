@@ -15,7 +15,6 @@ from scripts.train_model_selfplay import setup_args as setup_args_dict, TrainLoo
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
 
 IS_ORIGINAL = True
-NAME = "pegg-o"
 GEN, GATE, CLS = 0.6, 0.2, 0.1
 HYBRID = {'walk': 0.8, 'jump': 0.2}
 MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/62182'
@@ -32,14 +31,14 @@ def setup_args():
     encode_max_seq_len = 256
     decode_max_seq_len = 32
 
-    if not IS_ORIGINAL:
+    if IS_ORIGINAL:
         # receiver_basic = 'receiver_revised'
-        transmitter_basic = 'transmitter_revised'
+        transmitter_basic = 'pegg-o'
         exp_task = 'tasks.convai2.agents:OriginalTeacher,tasks.convai2.agents:OriginalPersonaTeacher'
         exp_eval_task = 'tasks.convai2transmitter.agents:SelfOriginalTeacher:no_cands'
     else:
         # receiver_basic = 'receiver_original'
-        transmitter_basic = 'pegg-o'
+        transmitter_basic = 'pegg-r'
         exp_task = 'tasks.convai2.agents:RevisedTeacher,tasks.convai2.agents:RevisedPersonaTeacher'
         exp_eval_task = 'tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands'
 
