@@ -131,7 +131,7 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
             precision_score = fcg_precision_score(persona_ground, common_ground, kw_graph_distance_matrix)
             recall_score = fcg_recall_score(persona_ground, common_ground, kw_graph_distance_matrix, 0.6)
             fcg_score = (precision_score + recall_score) / 2
-            fcg_scores[idx_batch][idx_turn] += fcg_score / (num_turn - idx_turn) + 1
+            fcg_scores[idx_batch][idx_turn] += fcg_score / (num_turn - idx_turn + 1)
             # common_grounds[idx_batch][idx_turn] += common_ground.tolist()
 
     # common_grounds = torch.tensor(common_grounds, dtype=torch.bool).to(device)
