@@ -112,7 +112,7 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
     # common_grounds = [[[] for _ in range(num_turn)] for _ in range(batch_size)]
     # num_common_ground_concepts = [[0 for _ in range(num_turn)] for _ in range(batch_size)]
     fcg_scores = [[0 for _ in range(num_turn)] for _ in range(batch_size)]
-    common_ground_history = [torch.zeros(2680) for _ in range(batch_size)]
+    common_ground_history = [torch.zeros(2680).to(device) for _ in range(batch_size)]
     for idx_turn, receive_messages, send_messages in zip(
             reversed(range(num_turn)), reversed(receive_messages_list), reversed(send_messages_list)):
         for idx_batch, receive_message, send_message in zip(range(batch_size), receive_messages, send_messages):
