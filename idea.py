@@ -51,7 +51,7 @@ def get_kw_graph_distance_matrix(path, device):
     kw_graph_distance_matrix = torch.where(0 == kw_graph_distance_matrix,
                                            torch.ones_like(kw_graph_distance_matrix) * min_distance,
                                            kw_graph_distance_matrix)
-    return kw_graph_distance_matrix
+    return {'matrix': kw_graph_distance_matrix, 'max': max_distance, 'min': min_distance}
 
 
 ## kw model forward
@@ -87,38 +87,10 @@ def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax):
     return probs
 
 
-def cal_final_reward(fcg_score):
-    batch_size = fcg_score.shape[0]
-    turn_size = fcg_score.shape[1]
-
-    # delayed reward
-    discount_gamma = 0.5
-
-    if discount_gamma > 0:
-
-        history_reward = fcg_score
-        discount_rewards = []
-
-        # reward of each step
-        step_reward = np.array([0.0 for _ in range(batch_size)])
-        for i in reversed(range(turn_size)):
-            r = history_reward[:, i]
-            step_reward = r + discount_gamma * step_reward
-            discount_rewards.insert(0, step_reward)
-        discount_rewards = np.array(discount_rewards)
-        discount_rewards = np.transpose(discount_rewards)
-
-    # min-max normalization
-    min_reward = discount_rewards.min()
-    max_reward = discount_rewards.max()
-    diff_reward = max_reward - min_reward + 1e-6
-    # scale to [0, 2]
-    normalized_reward = 2 * (discount_rewards - min_reward) / diff_reward
-
-    # subtract running average
-    reward_a_baseline = normalized_reward.mean(axis=0, keepdims=True)
-    reward_a_list = normalized_reward - reward_a_baseline
-
+def cal_final_reward(fcg_score, agent_a_coherent_reward, agent_a_language_reward):
+    reward_a_list = fcg_score + agent_a_coherent_reward + agent_a_language_reward
+    reward_a_baseline = reward_a_list.mean(axis=0, keepdims=True)
+    reward_a_list = reward_a_list - reward_a_baseline
     return reward_a_list
 
 
@@ -131,34 +103,67 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
                                    index=torch.tensor(persona_concepts).to(device),
                                    src=torch.ones_like(torch.tensor(persona_concepts, dtype=torch.float).to(device)))
     persona_ground[0] = 0
-    persona_ground = persona_ground.type(dtype=torch.bool)
-    num_persona_ground_concepts = persona_ground.sum().item()
+    # num_persona_ground_concepts = persona_ground.sum().item()
 
     batch_size = len(send_messages_list[0])
     num_turn = len(send_messages_list)
 
     # calculate common ground
-    common_grounds = [[[] for _ in range(num_turn)] for _ in range(batch_size)]
-    num_common_ground_concepts = [[0 for _ in range(num_turn)] for _ in range(batch_size)]
-    for idx_turn, receive_messages, send_messages in zip(range(num_turn), receive_messages_list,
-                                                         send_messages_list):
+    # common_grounds = [[[] for _ in range(num_turn)] for _ in range(batch_size)]
+    # num_common_ground_concepts = [[0 for _ in range(num_turn)] for _ in range(batch_size)]
+    fcg_scores = [[0 for _ in range(num_turn)] for _ in range(batch_size)]
+    common_ground_history = [torch.zeros(2680) for _ in range(batch_size)]
+    for idx_turn, receive_messages, send_messages in zip(
+            reversed(range(num_turn)), reversed(receive_messages_list), reversed(send_messages_list)):
         for idx_batch, receive_message, send_message in zip(range(batch_size), receive_messages, send_messages):
             concepts = extract_keywords(send_message + ' ' + receive_message, 50)
-            common_ground = torch.scatter(input=torch.zeros(2680).to(device), dim=-1,
-                                          index=torch.tensor(concepts).to(device),
-                                          src=torch.ones_like(torch.tensor(concepts, dtype=torch.float).to(device)))
-
+            common_ground_current = torch.scatter(input=torch.zeros(2680).to(device), dim=-1,
+                                                  index=torch.tensor(concepts).to(device),
+                                                  src=torch.ones_like(
+                                                      torch.tensor(concepts, dtype=torch.float).to(device)))
+            if have_concepts_in(common_ground_current):
+                common_ground_current[0] = 0
+            common_ground = (common_ground_current + common_ground_history[idx_batch]).clamp(0, 1)
+            common_ground_history[idx_batch] = common_ground
             # if no concept, then the common_ground_one_turn[0] will be scattered by 1.
-            if have_concepts_in(common_ground):
-                common_ground[0] = 0
-            num_common_ground_concepts[idx_batch][idx_turn] += common_ground.sum().item()
-            common_grounds[idx_batch][idx_turn] += common_ground.tolist()
 
-    common_grounds = torch.tensor(common_grounds, dtype=torch.bool).to(device)
-    num_common_ground_concepts = torch.tensor(num_common_ground_concepts).to(device)
-    concepts2persona_ground = (kw_graph_distance_matrix * persona_ground).sum(-1) / num_persona_ground_concepts
-    fcg_precision = (common_grounds * concepts2persona_ground).sum(-1) / num_common_ground_concepts
-    return fcg_precision.reciprocal()
+            # num_common_ground_concepts[idx_batch][idx_turn] += common_ground.sum().item()
+            precision_score = fcg_precision_score(persona_ground, common_ground, kw_graph_distance_matrix)
+            recall_score = fcg_recall_score(persona_ground, common_ground, kw_graph_distance_matrix, 0.6)
+            fcg_score = (precision_score + recall_score) / 2
+            fcg_scores[idx_batch][idx_turn] += fcg_score / (num_turn - idx_turn) + 1
+            # common_grounds[idx_batch][idx_turn] += common_ground.tolist()
+
+    # common_grounds = torch.tensor(common_grounds, dtype=torch.bool).to(device)
+    # num_common_ground_concepts = torch.tensor(num_common_ground_concepts).to(device)
+    # concepts2persona_ground = (kw_graph_distance_matrix * persona_ground).sum(-1) / num_persona_ground_concepts
+    # fcg_precision = (common_grounds * concepts2persona_ground).sum(-1) / num_common_ground_concepts
+    return fcg_scores
+
+
+def fcg_precision_score(persona_ground, common_ground, distance_matrix):
+    persona_ground = persona_ground.type(torch.bool)
+    common_ground = common_ground.type(torch.bool)
+    score = distance_matrix['matrix'][common_ground][:, persona_ground].mean()
+    if score.isnan():
+        score = distance_matrix['max']
+    else:
+        score = distance_matrix['max'] - score.item()
+    score = score / distance_matrix['max']
+    return score
+
+
+def fcg_recall_score(persona_ground, common_ground, distance_matrix, threshold=0.8):
+    persona_ground = persona_ground.type(torch.bool)
+    common_ground = common_ground.type(torch.bool)
+    scores = distance_matrix['matrix'][common_ground][:, persona_ground]
+    if 0 == scores.size(0) * scores.size(1):
+        score = 0
+    else:
+        overlap_ground = torch.where(scores < threshold, torch.ones_like(scores), torch.zeros_like(scores)).sum(
+            0).clamp(0, 1)
+        score = overlap_ground.sum() / len(overlap_ground)
+    return score.item()
 
 
 def have_concepts_in(common_ground_one_turn):
@@ -168,7 +173,7 @@ def have_concepts_in(common_ground_one_turn):
 def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     num_persona_kw = persona_kws.sum(-1)
     has_persona_kws = num_persona_kw.clamp(0, 1).unsqueeze(1).expand(-1, len(keyword2id))
-    sum_logits = (kw_graph_distance_matrix * (persona_kws.unsqueeze(1))).sum(-1)
+    sum_logits = (kw_graph_distance_matrix['matrix'] * (persona_kws.unsqueeze(1))).sum(-1)
     mean_logits = sum_logits / num_persona_kw.unsqueeze(1).clamp(min=1e-6)
     # logits = mean_logits.clamp(min=1e-6).reciprocal()
     logits = (mean_logits + (1 - has_persona_kws)).reciprocal()

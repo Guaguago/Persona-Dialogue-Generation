@@ -199,14 +199,22 @@ class SelfPlayWorld(DialogPartnerWorld):
             #
             # # receive message and send message are as attribute of the agent
             # # therefore we here only pass-by the first message
-            # agent_a_coherent_reward = agents[0].coherent_score(first_message)
+            agent_a_coherent_reward = agents[0].coherent_score(first_message)
+            min_coherent_reward = agent_a_coherent_reward.min()
+            max_coherent_reward = agent_a_coherent_reward.max()
+            diff_reward = max_coherent_reward - min_coherent_reward + 1e-6
+            agent_a_coherent_reward = (agent_a_coherent_reward - min_coherent_reward) / diff_reward
             # agent_b_coherent_reward = agents[1].coherent_score(first_message)
             #
-            # agent_a_language_reward = agents[0].language_score()
+            agent_a_language_reward = agents[0].language_score()
+            min_language_reward = agent_a_language_reward.min()
+            max_language_reward = agent_a_language_reward.max()
+            diff_reward = max_language_reward - min_language_reward + 1e-6
+            agent_a_language_reward = (agent_a_language_reward - min_language_reward) / diff_reward
             # agent_b_language_reward = agents[1].language_score()
 
             agent_a_fcg_reward = agents[0].finding_common_ground_score(agents[1].persona_transmitter)
-            reward_a_list = cal_final_reward(agent_a_fcg_reward)
+            reward_a_list = cal_final_reward(agent_a_fcg_reward, agent_a_coherent_reward, agent_a_language_reward)
 
             # # get batch size
             # batch_size = vt_persona_agent_a.size(0)
@@ -288,10 +296,10 @@ class SelfPlayWorld(DialogPartnerWorld):
             # reward_b_list = reward_b_list - reward_b_baseline
 
             if is_display:
-                print('---------------- Reward A ------------------')
-                print('finding_commmon_ground_reward : {}'.format(agent_a_fcg_reward[0]))
-                # print('coherent : {}'.format(agent_a_coherent_reward[0]))
-                # print('language : {}'.format(agent_a_language_reward[0]))
+                print('---------------- Reward ------------------')
+                print('finding_common_ground : {}'.format(agent_a_fcg_reward[0]))
+                print('coherent : {}'.format(agent_a_coherent_reward[0]))
+                print('language : {}'.format(agent_a_language_reward[0]))
                 # print('persona  : {}'.format(agent_a_persona_reward[0]))
                 # print('penalty  : {}'.format(information_penalty_a[0]))
                 # print('---------------- Reward B ------------------')

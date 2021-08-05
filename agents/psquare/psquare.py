@@ -1180,7 +1180,8 @@ class PSquareAgent(Agent):
         scores = cal_finding_common_ground_score(send_messages_list, receive_messages_list,
                                                  self.persona_transmitter, partner_persona,
                                                  self.kw_graph_distance_matrix, self.device)
-        return scores.cpu().numpy()
+        scores = torch.tensor(scores).cpu().numpy()
+        return scores
 
     def load(self, path, override=True):
         """Return opt and model states."""
