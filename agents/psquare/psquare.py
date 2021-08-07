@@ -1159,7 +1159,14 @@ class PSquareAgent(Agent):
 
         if self.use_cuda:
             xs = xs.cuda(cuda_device)
-        sorted_score = self.language_model.score_sentence(xs)
+
+        try:
+            sorted_score = self.language_model.score_sentence(xs)
+        except RuntimeError as e:
+            print(e)
+            print('shape: {}'.format(xs.size()))
+            print('input: {}'.format(xs))
+            print('input: {}'.format(xs[0]))
         # desorted ind
         desorted_ind = np.array(sort_ind).argsort()
         scores = sorted_score[desorted_ind]
