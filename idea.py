@@ -99,7 +99,8 @@ def generation_visualization(data_for_visualization, dict, valid_inds, batch_rep
     topk_lm_prob_probs = lm_prob.squeeze().topk(5)[0].transpose(0, 1).tolist()
 
     gate = data_for_visualization['gate'].squeeze()
-    gate_str = ' '.join(['{:>6.2f}'.format(i) for i in gate.squeeze()])
+    print('【{}】'.format(gate.size()))
+    gate_str = ' '.join(['{:>6.2f}'.format(i) for i in gate.squeeze().tolist()])
 
     topk_to_persona_idx = to_persona_prob.squeeze().topk(10)[1].tolist()
     # topk_to_persona_concept = [dict.tokenizer.decoder[i] for i in topk_to_persona_idx]
