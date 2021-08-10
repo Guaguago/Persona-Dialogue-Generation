@@ -805,7 +805,7 @@ class TransformerAgent(Agent):
                                      hybrid_weights=hybrid_weights,
                                      vocab_map=self.vocab_map,
                                      generate_samples=generate_samples)
-            predictions, cand_preds = out[0], out[2] # 生成example过程
+            predictions, cand_preds = out[0], out[2]  # 生成example过程
             data_for_visualization = out[5]
 
             if tgt_seq is not None and self.rank is False and generate_samples is False:

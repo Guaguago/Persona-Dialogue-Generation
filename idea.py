@@ -98,21 +98,20 @@ def generation_visualization(data_for_visualization, dict, valid_inds, batch_rep
     topk_lm_prob_word_idx = lm_prob.squeeze().topk(5)[1].transpose(0, 1).tolist()
     topk_lm_prob_probs = lm_prob.squeeze().topk(5)[0].transpose(0, 1).tolist()
 
-    gate = data_for_visualization['gate'].squeeze()
-    print('【{}】'.format(gate.size()))
-    gate_str = ' '.join(['{:>6.2f}'.format(i) for i in gate.squeeze().tolist()])
+    gate = data_for_visualization['gate'].squeeze().tolist()
+    gate.append(0)
+    # gate_str = ' '.join(['{:>6.2f}'.format(i) for i in gate.squeeze().tolist()])
 
     topk_to_persona_idx = to_persona_prob.squeeze().topk(10)[1].tolist()
-    # topk_to_persona_concept = [dict.tokenizer.decoder[i] for i in topk_to_persona_idx]
-    topk_to_persona_concept = dictionary.vec2txt(topk_to_persona_idx, recover_bpe=True)
+    topk_to_persona_concept = [id2keyword[i] for i in topk_to_persona_idx]
     topk_to_persona_p = to_persona_prob.squeeze().topk(10)[0].tolist()
     topk_to_persona_str = ' '.join(
         ['{:>6}'.format(x) + '(' + str('{:.6f}'.format(y)) + ')' for x, y in
          zip(topk_to_persona_concept, topk_to_persona_p)])
 
     topk_from_context_idx = from_context_prob.squeeze().topk(10)[1].tolist()
-    # topk_from_context_concept = [dict.tokenizer.decoder[i] for i in topk_from_context_idx]
-    topk_from_context_concept = dictionary.vec2txt(topk_from_context_idx, recover_bpe=True)
+    topk_from_context_concept = [id2keyword[i] for i in topk_from_context_idx]
+    # topk_from_context_concept = dictionary.vec2txt(topk_from_context_idx, recover_bpe=True)
     topk_from_context_p = from_context_prob.squeeze().topk(10)[0].tolist()
     topk_from_context_str = ' '.join(
         ['{:>6}'.format(x) + '(' + str('{:.6f}'.format(y)) + ')' for x, y in
@@ -120,7 +119,7 @@ def generation_visualization(data_for_visualization, dict, valid_inds, batch_rep
 
     concept_probs = (from_context_prob + to_persona_prob) / 2
     topk_concept_idx = concept_probs.squeeze().topk(10)[1].tolist()
-    topk_concept = dictionary.vec2txt(topk_concept_idx, recover_bpe=True)
+    topk_concept = [id2keyword[i] for i in topk_concept_idx]
     # topk_concept = [dict.tokenizer.decoder[i] for i in topk_concept_idx]
     topk_context_p = concept_probs.squeeze().topk(10)[0].tolist()
     topk_concept_str = ' '.join(
@@ -171,24 +170,34 @@ def generation_visualization(data_for_visualization, dict, valid_inds, batch_rep
         elif answers is not None:
             answers[valid_inds[i]] = curr_pred
 
+        display_outputs = [i.item() for i in output_tokens]
+        line_outputs = recover_bpe_encoding(dict.tokenizer.convert_ids_to_tokens(display_outputs))
+        output_str = ' '.join(['{:>7}'.format(i) for i in line_outputs])
+
+        print('=' * 150)
         print('TEXT: ', observations[valid_inds[i]]['text'])
         print('FROM: {}'.format(topk_from_context_str))
         print('TOPE: {}'.format(topk_to_persona_str))
         print('CONC: {}'.format(topk_concept_str))
-        print('PRED: ', curr_pred, '\n~')
+        print('PRED: {}'.format(output_str))
+
+        gate_str = ' '.join(['{:>7}'.format(w) + '(' + str('{:.4f}'.format(g)) + ')' for w, g in
+                             zip(line_outputs, gate)])
+
         print('GATE: {}'.format(gate_str))
         print('LM & HYBR:')
-        for line_idx, line_probs in zip(topk_hybrid_word_idx, topk_hybrid_probs):
-            line_words = recover_bpe_encoding(dict.tokenizer.convert_ids_to_tokens(line_idx))
-            line = ' '.join(['{:>6}'.format(word) + '(' + str('{:.4f}'.format(prob)) + ')' for word, prob in
-                             zip(line_words, line_probs)])
-            print(line)
-
-        print('-' * 150)
 
         for line_idx, line_probs in zip(topk_lm_prob_word_idx, topk_lm_prob_probs):
             line_words = recover_bpe_encoding(dict.tokenizer.convert_ids_to_tokens(line_idx))
-            line = ' '.join(['{:>6}'.format(word) + '(' + str('{:.4f}'.format(prob)) + ')' for word, prob in
+            line = ' '.join(['{:>7}'.format(word) + '(' + str('{:.4f}'.format(prob)) + ')' for word, prob in
+                             zip(line_words, line_probs)])
+            print(line)
+
+        print('-' * 50)
+
+        for line_idx, line_probs in zip(topk_hybrid_word_idx, topk_hybrid_probs):
+            line_words = recover_bpe_encoding(dict.tokenizer.convert_ids_to_tokens(line_idx))
+            line = ' '.join(['{:>7}'.format(word) + '(' + str('{:.4f}'.format(prob)) + ')' for word, prob in
                              zip(line_words, line_probs)])
             print(line)
 
