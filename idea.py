@@ -1,6 +1,8 @@
 from nltk.util import ngrams
 import nltk
 
+from agents.common.gpt_dictionary import recover_bpe_encoding
+
 nltk.data.path.append('/apdcephfs/share_916081/chencxu/pegg/data/nltk_data')
 from nltk.stem import WordNetLemmatizer
 import pickle
@@ -74,6 +76,124 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
     # top_kws = kw_logits.topk(3, dim=-1)[1]
     # (batch_size, 3), need to convert to vocab token id based on word2id
     return kw_logits, kw_hidden_states
+
+
+def generation_visualization(data_for_visualization, dict, valid_inds, batch_reply,
+                             observations, dictionary, end_idx, report_freq=0.1,
+                             labels=None, answers=None, ys=None):
+    """Predictions are mapped back to appropriate indices in the batch_reply
+       using valid_inds.
+       report_freq -- how often we report predictions
+    """
+
+    predictions = data_for_visualization['prediction']
+    from_context_prob = data_for_visualization['from_context_prob']
+    to_persona_prob = data_for_visualization['to_persona_prob']
+
+    hybrid_prob = data_for_visualization['hybrid_probs']
+    topk_hybrid_word_idx = hybrid_prob.squeeze().topk(5)[1].transpose(0, 1).tolist()
+    topk_hybrid_probs = hybrid_prob.squeeze().topk(5)[0].transpose(0, 1).tolist()
+
+    lm_prob = data_for_visualization['lm_probs']
+    topk_lm_prob_word_idx = lm_prob.squeeze().topk(5)[1].transpose(0, 1).tolist()
+    topk_lm_prob_probs = lm_prob.squeeze().topk(5)[0].transpose(0, 1).tolist()
+
+    gate = data_for_visualization['gate'].squeeze()
+    gate_str = ' '.join(['{:>6.2f}'.format(i) for i in gate.squeeze()])
+
+    topk_to_persona_idx = to_persona_prob.squeeze().topk(10)[1].tolist()
+    # topk_to_persona_concept = [dict.tokenizer.decoder[i] for i in topk_to_persona_idx]
+    topk_to_persona_concept = dictionary.vec2txt(topk_to_persona_idx, recover_bpe=True)
+    topk_to_persona_p = to_persona_prob.squeeze().topk(10)[0].tolist()
+    topk_to_persona_str = ' '.join(
+        ['{:>6}'.format(x) + '(' + str('{:.6f}'.format(y)) + ')' for x, y in
+         zip(topk_to_persona_concept, topk_to_persona_p)])
+
+    topk_from_context_idx = from_context_prob.squeeze().topk(10)[1].tolist()
+    # topk_from_context_concept = [dict.tokenizer.decoder[i] for i in topk_from_context_idx]
+    topk_from_context_concept = dictionary.vec2txt(topk_from_context_idx, recover_bpe=True)
+    topk_from_context_p = from_context_prob.squeeze().topk(10)[0].tolist()
+    topk_from_context_str = ' '.join(
+        ['{:>6}'.format(x) + '(' + str('{:.6f}'.format(y)) + ')' for x, y in
+         zip(topk_from_context_concept, topk_from_context_p)])
+
+    concept_probs = (from_context_prob + to_persona_prob) / 2
+    topk_concept_idx = concept_probs.squeeze().topk(10)[1].tolist()
+    topk_concept = dictionary.vec2txt(topk_concept_idx, recover_bpe=True)
+    # topk_concept = [dict.tokenizer.decoder[i] for i in topk_concept_idx]
+    topk_context_p = concept_probs.squeeze().topk(10)[0].tolist()
+    topk_concept_str = ' '.join(
+        ['{:>6}'.format(x) + '(' + str('{:.6f}'.format(y)) + ')' for x, y in zip(topk_concept, topk_context_p)])
+
+    for i in range(len(predictions)):
+        # map the predictions back to non-empty examples in the batch
+        # we join with spaces since we produce tokens one at a timelab
+        curr = batch_reply[valid_inds[i]]
+        output_tokens = []
+        j = 0
+        for c in predictions[i]:
+            if c == end_idx and j != 0:
+                break
+            else:
+                output_tokens.append(c)
+            j += 1
+        if len(output_tokens) == 0:
+            output_tokens.append(3)
+        if dictionary.default_tok == 'bpe':
+            # TODO: judge whether the dictionary has method including parameter recover_bpe
+            try:
+                curr_pred = dictionary.vec2txt(output_tokens, recover_bpe=True)
+            except Exception as e:
+                print("You are using BPE decoding but do not recover them in prediction. "
+                      "You should support the interface `vec2txt(tensors, recover_bpe)` in your custom dictionary.")
+                print("Error Message:\n {}".format(e))
+                curr_pred = dictionary.vec2txt(output_tokens)
+        else:
+            curr_pred = dictionary.vec2txt(output_tokens)
+
+        if curr_pred == '':
+            print("Got Error: \n")
+            print("output tokens {} length: {}".format(i, len(output_tokens)))
+            print("predictions: {} ".format(predictions))
+            curr_pred = 'hello how are you today'
+
+        curr['text'] = curr_pred
+
+        if labels is not None and answers is not None and ys is not None:
+            y = []
+            for c in ys[i]:
+                if c == end_idx:
+                    break
+                else:
+                    y.append(c)
+            answers[valid_inds[i]] = y
+        elif answers is not None:
+            answers[valid_inds[i]] = curr_pred
+
+        print('TEXT: ', observations[valid_inds[i]]['text'])
+        print('FROM: {}'.format(topk_from_context_str))
+        print('TOPE: {}'.format(topk_to_persona_str))
+        print('CONC: {}'.format(topk_concept_str))
+        print('PRED: ', curr_pred, '\n~')
+        print('GATE: {}'.format(gate_str))
+        print('LM & HYBR:')
+        for line_idx, line_probs in zip(topk_hybrid_word_idx, topk_hybrid_probs):
+            line_words = recover_bpe_encoding(dict.tokenizer.convert_ids_to_tokens(line_idx))
+            line = ' '.join(['{:>6}'.format(word) + '(' + str('{:.4f}'.format(prob)) + ')' for word, prob in
+                             zip(line_words, line_probs)])
+            print(line)
+
+        print('-' * 150)
+
+        for line_idx, line_probs in zip(topk_lm_prob_word_idx, topk_lm_prob_probs):
+            line_words = recover_bpe_encoding(dict.tokenizer.convert_ids_to_tokens(line_idx))
+            line = ' '.join(['{:>6}'.format(word) + '(' + str('{:.4f}'.format(prob)) + ')' for word, prob in
+                             zip(line_words, line_probs)])
+            print(line)
+
+    # print("predictions shape: {}".format(predictions.size()))
+    # print("batch reply: {}".format(batch_reply))
+    return
 
 
 def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax):

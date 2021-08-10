@@ -68,7 +68,7 @@ class Gpt2SeqModel(nn.Module):
     def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
                 valid_cands=None, prev_enc=None, rank_during_training=False, sampling=False, sampling_cands=None,
                 walk_probs=None, jump_probs=None, vocab_map=None, lm_mask=None, hybrid_weights=None,
-                kw_hidden_states=None):
+                generate_samples=False):
         # concat src_seq and tgt_seq as one sentence, use start token to separate them.
         if tgt_seq is not None:
             # keep track of longest label we've ever seen
@@ -163,12 +163,15 @@ class Gpt2SeqModel(nn.Module):
                 # idea interface: modified
                 predictions, hidden_states = self.beam_search(batch_size, prior_context, walk_probs, jump_probs,
                                                               hybrid_weights, vocab_map)
-                gate = None
+                gate = self.sigmoid(self.gate_linear(hidden_states))
 
 
             else:  # hits@1
-                predictions, hidden_states = self.greedy_decoding(batch_size, prior_context, prior_dis, walk_probs,
-                                                                  hybrid_weights, jump_probs, vocab_map)
+                predictions, hidden_states, data_for_visualization = self.greedy_decoding(batch_size, prior_context,
+                                                                                          prior_dis, walk_probs,
+                                                                                          hybrid_weights, jump_probs,
+                                                                                          vocab_map,
+                                                                                          generate_samples)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
             positive_score = self.linear(hidden_states[:, -1, :])
@@ -235,29 +238,31 @@ class Gpt2SeqModel(nn.Module):
                     cand_scores = torch.cat(cand_scores, dim=0)
                     cand_preds = cand_scores.sort(1, True)[1]
 
-        return predictions, hybrid_probs, cand_preds, cand_scores, gate, positive_score, negative_score
+        return predictions, hybrid_probs, cand_preds, cand_scores, gate, data_for_visualization, positive_score, negative_score
 
     # TODO: we do not do any penalty
     def _length_penalty(self, sequence_lengths):
         return sequence_lengths
 
-    def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, hybrid_weights, jump_probs, vocab_map):
+    def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, hybrid_weights, jump_probs, vocab_map,
+                        generate_samples=False):
+        data_for_visualization = {}
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
         is_end = torch.zeros(batch_size, dtype=torch.bool, device=device)
-
         pred_output = torch.zeros((batch_size, self.longest_label), dtype=torch.long, device=device)
         past_input = prior_context
+        src_seq_len = past_input.size(-1)
         past_dis = prior_dis
         with torch.no_grad():
             for step in range(self.longest_label):
                 logits, hidden_states = self.transformer_module.forward(past_input, None, past_dis)
                 # logits, _ = self.transformer_module.forward(past)
-                logits = logits[:, -1, :] / self.temperature
+                last_logits = logits[:, -1, :] / self.temperature
                 # log_probs = F.log_softmax(logits, dim=-1)
 
                 ### idea interface ###
-                lm_probs = self.softmax(logits)
+                lm_probs = self.softmax(last_logits)
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
                 # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
                 # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
@@ -310,7 +315,25 @@ class Gpt2SeqModel(nn.Module):
                 is_end = is_end | (predict_tok == self.end_idx).view(-1)
                 if (~is_end).sum() == 0:
                     break
-        return pred_output, hidden_states
+
+        if generate_samples:
+            shift_logits = logits[..., src_seq_len:, :].contiguous()
+            lm_probs = self.softmax(shift_logits)
+            gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:, :]))
+            # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
+            # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
+            # kw_probs = self.softmax(
+            #     kw_probs.gather(-1, vocab_map.unsqueeze(0).expand(lm_probs.size())) / 0.01)
+            hybrid_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map,
+                                            lm_probs, gate, self.softmax, lm_mask=None)
+            data_for_visualization['from_context_prob'] = walk_probs
+            data_for_visualization['to_persona_prob'] = jump_probs
+            data_for_visualization['hybrid_probs'] = hybrid_probs
+            data_for_visualization['prediction'] = pred_output
+            data_for_visualization['gate'] = gate
+            data_for_visualization['lm_probs'] = lm_probs
+
+        return pred_output, hidden_states, data_for_visualization
 
     def train_greedy_decoding(self, batch_size, prior_context, prior_dis,
                               walk_probs, jump_probs, hybrid_weights, vocab_map):

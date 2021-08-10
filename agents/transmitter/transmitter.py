@@ -29,7 +29,8 @@ from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
-from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, kw_word_map
+from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, kw_word_map, \
+    generation_visualization
 from idea import get_keyword_mask_matrix, load_kw_model, get_kw_graph_distance_matrix
 from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs, hybrid_kw_and_lm_probs
 from idea import prepare_example_persona_kws, prepare_batch_persona_kw_mask
@@ -704,14 +705,14 @@ class TransformerAgent(Agent):
         return obs
 
     def predict(self, src_seq, src_seq_turn, src_seq_dis, tgt_seq=None, tgt_seq_turn=None, cands=None, valid_cands=None,
-                sampling_cands=None, is_training=False, idea_interface=None):
+                sampling_cands=None, is_training=False, idea_interface=None, generate_samples=False):
         """Produce a prediction from our model.
 
         Update the model using the targets if available, otherwise rank
         candidates as well if they are available and param is set.
         """
         predictions, cand_preds = None, None
-
+        data_for_visualization = None
         # idea interface: for both train and generation codes.
         for_kw_model = idea_interface['for_kw_model']
         persona_kw_mask = idea_interface['persona_kw_mask']
@@ -803,10 +804,11 @@ class TransformerAgent(Agent):
                                      walk_probs=walk_probs,
                                      hybrid_weights=hybrid_weights,
                                      vocab_map=self.vocab_map,
-                                     kw_hidden_states=kw_hidden_states)
-            predictions, cand_preds = out[0], out[2]  # 生成example过程
+                                     generate_samples=generate_samples)
+            predictions, cand_preds = out[0], out[2] # 生成example过程
+            data_for_visualization = out[5]
 
-            if tgt_seq is not None and self.rank is False:
+            if tgt_seq is not None and self.rank is False and generate_samples is False:
                 # calculate loss on targets
                 out = self.model.forward(src_seq=src_seq,
                                          src_seq_turn=src_seq_turn,
@@ -818,8 +820,7 @@ class TransformerAgent(Agent):
                                          jump_probs=jump_probs,
                                          walk_probs=walk_probs,
                                          hybrid_weights=hybrid_weights,
-                                         vocab_map=self.vocab_map,
-                                         kw_hidden_states=kw_hidden_states)
+                                         vocab_map=self.vocab_map)
 
                 hybrid_probs = out[1]
 
@@ -835,7 +836,7 @@ class TransformerAgent(Agent):
                 self.metrics['loss'] += gen_loss.item()
                 self.metrics['num_tokens'] += target_tokens
 
-        return predictions, cand_preds
+        return predictions, cand_preds, data_for_visualization
 
     def vectorize(self, observations):
         """Convert a list of observations into input & target tensors."""
@@ -969,9 +970,11 @@ class TransformerAgent(Agent):
 
         # produce best_pred, train on targets if availables
         cand_inds = [i[0] for i in valid_cands] if valid_cands is not None else None
-        predictions, cand_preds = self.predict(src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn, cands,
-                                               cand_inds, sampling_cands, is_training,
-                                               idea_interface=idea_dict)
+        predictions, cand_preds, data_for_visualization = self.predict(src_seq, src_seq_turn, src_seq_dis, tgt_seq,
+                                                                       tgt_seq_turn, cands,
+                                                                       cand_inds, sampling_cands, is_training,
+                                                                       idea_interface=idea_dict,
+                                                                       generate_samples=self.opt['generate_samples'])
 
         if is_training:
             report_freq = 0
@@ -980,6 +983,13 @@ class TransformerAgent(Agent):
         if predictions is not None:
             PaddingUtils.map_predictions(
                 predictions, valid_inds, batch_reply, observations,
+                self.dict, self.END_IDX, report_freq=report_freq, labels=labels,
+                answers=self.answers, ys=tgt_seq.data if tgt_seq is not None else None)
+
+        if data_for_visualization is not None:
+            generation_visualization(
+                data_for_visualization, self.dict,
+                valid_inds, batch_reply, observations,
                 self.dict, self.END_IDX, report_freq=report_freq, labels=labels,
                 answers=self.answers, ys=tgt_seq.data if tgt_seq is not None else None)
 

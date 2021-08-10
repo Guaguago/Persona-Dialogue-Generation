@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 from parlai.core.dict import DictionaryAgent
 import torch
+
 try:
     from pytorch_pretrained_bert import OpenAIGPTTokenizer
 except ImportError:
@@ -98,4 +99,5 @@ class GPTDictionaryAgent(DictionaryAgent):
         toks = self.tokenizer.convert_ids_to_tokens(idxs)
         if recover_bpe:
             toks = recover_bpe_encoding(toks)
+        # toks = ['{:>5}'.format(i) for i in toks]
         return ' '.join(toks)
