@@ -78,9 +78,9 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
     return kw_logits, kw_hidden_states
 
 
-def generation_visualization(data_for_visualization, dict, valid_inds, batch_reply,
-                             observations, dictionary, end_idx, report_freq=0.1,
-                             labels=None, answers=None, ys=None):
+def visualize_samples(data_for_visualization, dict, valid_inds, batch_reply,
+                      observations, dictionary, end_idx, report_freq=0.1,
+                      labels=None, answers=None, ys=None):
     """Predictions are mapped back to appropriate indices in the batch_reply
        using valid_inds.
        report_freq -- how often we report predictions
@@ -90,7 +90,7 @@ def generation_visualization(data_for_visualization, dict, valid_inds, batch_rep
     from_context_prob = data_for_visualization['from_context_prob']
     to_persona_prob = data_for_visualization['to_persona_prob']
     concept_probs = (from_context_prob + to_persona_prob) / 2
-
+    final_concept_probs = data_for_visualization['final_concept_probs']
     hybrid_prob = data_for_visualization['hybrid_probs']
 
     lm_prob = data_for_visualization['lm_probs']
@@ -154,6 +154,8 @@ def generation_visualization(data_for_visualization, dict, valid_inds, batch_rep
         visualize_concept_probs = visualize_topk_nodes_with_values(concept_probs, id2keyword, k=10, concept=True)
 
         visualize_lm_probs = visualize_topk_nodes_with_values(lm_prob[i], dict, k=5, concept=False)
+        visualize_final_concept_probs = visualize_topk_nodes_with_values(final_concept_probs[i], dict, k=5,
+                                                                         concept=False)
         visualize_hb_probs = visualize_topk_nodes_with_values(hybrid_prob[i], dict, k=5, concept=False)
 
         print('=' * 150)
@@ -168,6 +170,8 @@ def generation_visualization(data_for_visualization, dict, valid_inds, batch_rep
         print('GATE: {}'.format(gate_str))
         print('LM & HYBR:')
         print('{}'.format(visualize_lm_probs))
+        print('-' * 150)
+        print('{}'.format(visualize_final_concept_probs))
         print('-' * 150)
         print('{}'.format(visualize_hb_probs))
 
@@ -191,7 +195,7 @@ def visualize_topk_nodes_with_values(tensor, vocab, k=10, concept=False):
         values = tensor.topk(5)[0].transpose(0, 1).tolist()
         for i, v in zip(idx, values):
             words = recover_bpe_encoding(vocab.tokenizer.convert_ids_to_tokens(i))
-            line = ' '.join(['{:>7}'.format(word) + '(' + str('{:.4f}'.format(prob)) + ')'
+            line = ' '.join(['{:>9}'.format(word) + '(' + str('{:.6f}'.format(prob)) + ')'
                              for word, prob in zip(words, v)])
             visualization += (line + '\n')
     return visualization
@@ -314,40 +318,34 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     return probs
 
 
-def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, vocab_map, lm_probs, gate, softmax, lm_mask=None):
+def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map, concept2word_mask,
+                     lm_logits, gate, softmax, lm_mask=None):
     # jump or walk [10, 2680]
     assert len(gate.size()) == 3
-    assert len(lm_probs.size()) == 3
-    kw_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk']).unsqueeze(
-        1).expand(lm_probs.size(0), lm_probs.size(1), -1)
+    assert len(lm_logits.size()) == 3
 
-    # revert_logits = kw_probs.logit()
-    kw_probs = top_k_logits(kw_probs, 5)
-    # revert_logits[..., 0] = -1e10
-    kw_probs = softmax(
-        kw_probs.gather(-1, vocab_map.unsqueeze(0).unsqueeze(1).expand(
-            lm_probs.size())))
+    lm_probs = softmax(lm_logits)
+    basic_concept_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
 
-    hybrid_probs = hybrid_kw_and_lm_probs(
-        gate=gate,
-        kw_probs=kw_probs,
-        lm_probs=lm_probs,
-        lm_mask=lm_mask,
-    )
+    logits = concept2word_mask * (lm_logits.unsqueeze(-2))
+    logits = torch.where(logits.eq(0), torch.ones_like(logits) * -1e10, logits)
+    probs_given_concept = softmax(logits)
+    final_concept_probs = (basic_concept_probs.unsqueeze(1).unsqueeze(-1) * probs_given_concept).sum(-2)
 
-    return hybrid_probs
+    hybrid_probs = cal_hybrid_probs_each_timestep(gate, final_concept_probs, lm_probs, lm_mask)
+    return hybrid_probs, final_concept_probs
 
 
-def hybrid_kw_and_lm_probs(gate, kw_probs, lm_probs, lm_mask):
+def cal_hybrid_probs_each_timestep(gate, concept_probs, lm_probs, lm_mask):
     # for gate only optimize examples with keywords in the response
     if lm_mask is not None:
-        hybrid_probs = lm_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(1) * kw_probs
+        hybrid_probs = lm_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(1) * concept_probs
     else:
-        hybrid_probs = lm_probs * (1 - gate) + gate * kw_probs
+        hybrid_probs = lm_probs * (1 - gate) + gate * concept_probs
     return hybrid_probs
 
 
-def kw_word_map(dict, device):
+def cal_word2concept_map(dict, device):
     map = [0] * 40516
     tokenizer = dict.tokenizer
     keys = tokenizer.decoder.keys()
@@ -361,6 +359,14 @@ def kw_word_map(dict, device):
         else:
             map[idx] = 0
     return torch.tensor(map).to(device)
+
+
+def cal_concept2word_mask(word_concept_map, device):
+    concept_word_mask = torch.cat(
+        [word_concept_map.eq(concept_id).unsqueeze(0) + 0 for concept_id in range(len(keyword2id))], dim=0)
+    concept_word_mask[0] = 0
+    assert (word_concept_map > 0).sum() == concept_word_mask.sum()
+    return concept_word_mask
 
 
 def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
@@ -410,12 +416,12 @@ def prepare_batch_for_kw_model(obs, device):
     return inputs_for_kw_model
 
 
-def inputs_for_gate_module(tgt_seq, vocab_map):
+def inputs_for_gate_module(tgt_seq, word2concept_map):
     # len_gate_label = len(src) + len(tgt)
 
     gate_label = tgt_seq.clone()
     gate_label[gate_label == 0] = -1
-    gate_label[gate_label != -1] = (vocab_map.gather(0, gate_label[gate_label != -1]) != 0) + 0
+    gate_label[gate_label != -1] = (word2concept_map.gather(0, gate_label[gate_label != -1]) != 0) + 0
 
     gate_mask = (gate_label != -1) + 0
     gate_label.masked_fill_(gate_label == -1, 0)

@@ -29,10 +29,10 @@ from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
-from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, kw_word_map, \
-    generation_visualization
+from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, cal_word2concept_map, \
+    visualize_samples, cal_concept2word_mask
 from idea import get_keyword_mask_matrix, load_kw_model, get_kw_graph_distance_matrix
-from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs, hybrid_kw_and_lm_probs
+from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs, cal_hybrid_probs_each_timestep
 from idea import prepare_example_persona_kws, prepare_batch_persona_kw_mask
 
 # lstm, transformer, gpt2
@@ -295,7 +295,8 @@ class TransformerAgent(Agent):
 
             # idea interface
             self.device = shared['device']
-            self.vocab_map = shared['vocab_map']
+            self.word2concept_map = shared['word2concept_map']
+            self.concept2word_mask = shared['concept2word_mask']
             self.kw_mask_matrix = shared['kw_mask_matrix']
             self.kw_graph_distance_matrix = shared['kw_graph_distance_matrix']
 
@@ -342,7 +343,9 @@ class TransformerAgent(Agent):
             self.dict = self.dictionary_class()(opt)
 
             # idea interface
-            self.vocab_map = kw_word_map(self.dict, self.device)
+            self.word2concept_map = cal_word2concept_map(self.dict, self.device)
+            self.concept2word_mask = cal_concept2word_mask(self.word2concept_map, self.device)
+
             self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
             self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(
                 self.opt['datapath'] + '/concept_net/keyword_graph_weighted_distance_dict.pkl', self.device)
@@ -625,7 +628,8 @@ class TransformerAgent(Agent):
 
         # idea interface
         shared['device'] = self.device
-        shared['vocab_map'] = self.vocab_map
+        shared['word2concept_map'] = self.word2concept_map
+        shared['concept2word_mask'] = self.concept2word_mask
         shared['kw_mask_matrix'] = self.kw_mask_matrix
         shared['kw_graph_distance_matrix'] = self.kw_graph_distance_matrix
 
@@ -746,7 +750,8 @@ class TransformerAgent(Agent):
                                          lm_mask=lm_mask,
                                          jump_probs=jump_probs,
                                          walk_probs=walk_probs,
-                                         vocab_map=self.vocab_map,
+                                         word2concept_map=self.word2concept_map,
+                                         concept2word_mask=self.concept2word_mask,
                                          hybrid_weights=hybrid_weights)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
@@ -803,7 +808,8 @@ class TransformerAgent(Agent):
                                      jump_probs=jump_probs,
                                      walk_probs=walk_probs,
                                      hybrid_weights=hybrid_weights,
-                                     vocab_map=self.vocab_map,
+                                     word2concept_map=self.word2concept_map,
+                                     concept2word_mask=self.concept2word_mask,
                                      visualization=visualization)
             predictions, cand_preds = out[0], out[2]  # 生成example过程
             data_for_visualization = out[5]
@@ -820,7 +826,8 @@ class TransformerAgent(Agent):
                                          jump_probs=jump_probs,
                                          walk_probs=walk_probs,
                                          hybrid_weights=hybrid_weights,
-                                         vocab_map=self.vocab_map)
+                                         word2concept_map=self.word2concept_map,
+                                         concept2word_mask=self.concept2word_mask)
 
                 hybrid_probs = out[1]
 
@@ -957,7 +964,7 @@ class TransformerAgent(Agent):
         # idea interface
         persona_kw_mask = prepare_batch_persona_kw_mask(observations, device=self.device)
         data_for_kw_model = prepare_batch_for_kw_model(observations, device=self.device)
-        data_for_gate = inputs_for_gate_module(tgt_seq, self.vocab_map)
+        data_for_gate = inputs_for_gate_module(tgt_seq, self.word2concept_map)
         idea_dict = {
             'for_kw_model': data_for_kw_model,
             'for_gate_module': data_for_gate,
@@ -987,7 +994,7 @@ class TransformerAgent(Agent):
                 answers=self.answers, ys=tgt_seq.data if tgt_seq is not None else None)
 
         if data_for_visualization is not None:
-            generation_visualization(
+            visualize_samples(
                 data_for_visualization, self.dict,
                 valid_inds, batch_reply, observations,
                 self.dict, self.END_IDX, report_freq=report_freq, labels=labels,

@@ -23,9 +23,9 @@ from agents.transmitter.gpt.optim import GPTOptimizer
 from torch import autograd
 import json
 from agents.psquare.utils import LanguageModel
-from idea import prepare_example_persona_kws, prepare_example_for_kw_model
+from idea import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_mask
 from idea import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model
-from idea import kw_word_map, get_keyword_mask_matrix, get_kw_graph_distance_matrix
+from idea import cal_word2concept_map, get_keyword_mask_matrix, get_kw_graph_distance_matrix
 from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs
 from idea import cal_finding_common_ground_score
 import torch.nn as nn
@@ -347,7 +347,8 @@ class PSquareAgent(Agent):
 
             # idea interface
             self.device = shared['device']
-            self.vocab_map = shared['vocab_map']
+            self.word2concept_map = shared['word2concept_map']
+            self.concept2word_mask = shared['concept2word_mask']
             self.kw_mask_matrix = shared['kw_mask_matrix']
             self.kw_graph_distance_matrix = shared['kw_graph_distance_matrix']
 
@@ -382,7 +383,9 @@ class PSquareAgent(Agent):
             self.dict = self.dictionary_class()(opt)
 
             # idea interface
-            self.vocab_map = kw_word_map(self.dict, self.device)
+            self.word2concept_map = cal_word2concept_map(self.dict, self.device)
+            self.concept2word_mask = cal_concept2word_mask(self.word2concept_map, self.device)
+
             self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
             self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(
                 self.opt['datapath'] + '/concept_net/keyword_graph_weighted_distance_dict.pkl', self.device)
@@ -543,7 +546,8 @@ class PSquareAgent(Agent):
 
         # idea interface
         shared['device'] = self.device
-        shared['vocab_map'] = self.vocab_map
+        shared['word2concept_map'] = self.word2concept_map
+        shared['concept2word_mask'] = self.concept2word_mask
         shared['kw_mask_matrix'] = self.kw_mask_matrix
         shared['kw_graph_distance_matrix'] = self.kw_graph_distance_matrix
 
@@ -849,9 +853,9 @@ class PSquareAgent(Agent):
                                                    tgt_seq_turn=tgt_seq_turn,
                                                    jump_probs=jump_probs,
                                                    walk_probs=walk_probs,
-                                                   vocab_map=self.vocab_map,
-                                                   hybrid_weights=hybrid_weights,
-                                                   kw_hidden_states=kw_hidden_states)
+                                                   word2concept_map=self.word2concept_map,
+                                                   concept2word_mask=self.concept2word_mask,
+                                                   hybrid_weights=hybrid_weights)
                     predictions, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
                     # idx = predictions.unsqueeze(dim=2)
                     # loss = self.criterion(scores, idx)
@@ -876,7 +880,7 @@ class PSquareAgent(Agent):
                                                    walk_probs=walk_probs,
                                                    jump_probs=jump_probs,
                                                    hybrid_weights=hybrid_weights,
-                                                   vocab_map=self.vocab_map)
+                                                   word2concept_map=self.word2concept_map)
                     # generated response
                     predictions, hybrid_probs, cand_preds = out[0], out[1], out[2]
                     self.metrics['num_selfplay_turns'] += 1
@@ -888,7 +892,7 @@ class PSquareAgent(Agent):
                                                    walk_probs=walk_probs,
                                                    jump_probs=jump_probs,
                                                    hybrid_weights=hybrid_weights,
-                                                   vocab_map=self.vocab_map)
+                                                   word2concept_map=self.word2concept_map)
                     # generated response
                     predictions, hybrid_probs, cand_preds = out[0], out[1], out[2]
                     idx = predictions.unsqueeze(dim=2)
@@ -928,8 +932,7 @@ class PSquareAgent(Agent):
                                                jump_probs=jump_probs,
                                                walk_probs=walk_probs,
                                                hybrid_weights=hybrid_weights,
-                                               vocab_map=self.vocab_map,
-                                               kw_hidden_states=kw_hidden_states)
+                                               word2concept_map=self.word2concept_map)
                 predictions, cand_preds = out[0], out[2]
                 if tgt_seq is not None:
                     # calculate loss on targets
@@ -943,7 +946,7 @@ class PSquareAgent(Agent):
                                            jump_probs=jump_probs,
                                            walk_probs=walk_probs,
                                            hybrid_weights=hybrid_weights,
-                                           vocab_map=self.vocab_map)
+                                           word2concept_map=self.word2concept_map)
                     # scores = out[1]
                     # loss = self.criterion(scores, tgt_seq)
                     hybrid_probs = out[1]
