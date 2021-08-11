@@ -201,14 +201,16 @@ def visualize_topk_nodes_with_values(tensor, vocab, k=10, concept=False):
     return visualization
 
 
-def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax):
-    neighbors = kw_mask_matrix[context_kws].sum(dim=1).clamp(min=0, max=1)  # (keyword_vocab_size)
+def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax, topk=50):
+    # neighbors = kw_mask_matrix[context_kws].sum(dim=1).clamp(min=0, max=1)  # (keyword_vocab_size)
     # kw_logits: (vocab, )
-    num_neighbors = neighbors.sum(1).long()
-    has_neighbors = num_neighbors.clamp(0, 1).unsqueeze(1).expand(-1, kw_logits.size(-1))
-    neighbor_filter = kw_logits * ((1 - has_neighbors) + neighbors)
-    logits = walk_logits(neighbor_filter)
-    probs = softmax(logits)
+    # num_neighbors = neighbors.sum(1).long()
+    # has_neighbors = num_neighbors.clamp(0, 1).unsqueeze(1).expand(-1, kw_logits.size(-1))
+    # neighbor_filter = kw_logits * ((1 - has_neighbors) + neighbors)
+    # logits = walk_logits(neighbor_filter, 10)
+
+    logits = top_k_logits(kw_logits, topk)
+    probs = softmax(logits / 3.0)
     return probs
 
 
@@ -301,11 +303,12 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     sum_logits = (kw_graph_distance_matrix['matrix'] * (persona_kws.unsqueeze(1))).sum(-1)
     mean_logits = sum_logits / num_persona_kw.unsqueeze(1).clamp(min=1e-6)
     # logits = mean_logits.clamp(min=1e-6).reciprocal()
-    logits = (mean_logits + (1 - has_persona_kws)).reciprocal()
+    # logits = (mean_logits + (1 - has_persona_kws)).reciprocal()
+    logits = - mean_logits
 
     # hardly select topk concepts
     logits = top_k_logits(logits, topk)
-    probs = softmax(logits)
+    probs = softmax(logits / 0.25)
 
     nan = probs.isnan().sum()
     if nan > 0:
@@ -324,7 +327,7 @@ def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map, c
     assert len(gate.size()) == 3
     assert len(lm_logits.size()) == 3
 
-    lm_probs = softmax(lm_logits)
+    lm_probs = softmax(lm_logits / 2.5)
     basic_concept_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
 
     logits = concept2word_mask * (lm_logits.unsqueeze(-2))
@@ -575,4 +578,4 @@ def top_k_logits(logits, k):
     else:
         values = torch.topk(logits, k)[0]
         batch_mins = values[..., -1:]
-        return torch.where(logits < batch_mins, torch.ones_like(logits) * -1e10, torch.ones_like(logits))
+        return torch.where(logits < batch_mins, torch.ones_like(logits) * -1e10, logits)
