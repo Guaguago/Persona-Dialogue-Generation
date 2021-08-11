@@ -68,7 +68,7 @@ class Gpt2SeqModel(nn.Module):
     def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
                 valid_cands=None, prev_enc=None, rank_during_training=False, sampling=False, sampling_cands=None,
                 walk_probs=None, jump_probs=None, vocab_map=None, lm_mask=None, hybrid_weights=None,
-                generate_samples=False):
+                visualization=False):
         # concat src_seq and tgt_seq as one sentence, use start token to separate them.
         if tgt_seq is not None:
             # keep track of longest label we've ever seen
@@ -81,7 +81,7 @@ class Gpt2SeqModel(nn.Module):
             src_seq_dis = np.array(src_seq_dis)
 
         # evaluation return none scores
-
+        data_for_visualization = None
         hybrid_probs = None
         negative_score = None
         start_tensor = self.start_tensor.detach().expand(batch_size, 1)
@@ -171,7 +171,7 @@ class Gpt2SeqModel(nn.Module):
                                                                                           prior_dis, walk_probs,
                                                                                           hybrid_weights, jump_probs,
                                                                                           vocab_map,
-                                                                                          generate_samples)
+                                                                                          visualization)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
             positive_score = self.linear(hidden_states[:, -1, :])
@@ -245,7 +245,7 @@ class Gpt2SeqModel(nn.Module):
         return sequence_lengths
 
     def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, hybrid_weights, jump_probs, vocab_map,
-                        generate_samples=False):
+                        visualization=False):
         data_for_visualization = {}
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
@@ -316,7 +316,7 @@ class Gpt2SeqModel(nn.Module):
                 if (~is_end).sum() == 0:
                     break
 
-        if generate_samples:
+        if visualization:
             shift_logits = logits[..., src_seq_len:, :].contiguous()
             lm_probs = self.softmax(shift_logits)
             gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:, :]))

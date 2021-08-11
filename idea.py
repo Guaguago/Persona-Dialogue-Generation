@@ -89,41 +89,15 @@ def generation_visualization(data_for_visualization, dict, valid_inds, batch_rep
     predictions = data_for_visualization['prediction']
     from_context_prob = data_for_visualization['from_context_prob']
     to_persona_prob = data_for_visualization['to_persona_prob']
+    concept_probs = (from_context_prob + to_persona_prob) / 2
 
     hybrid_prob = data_for_visualization['hybrid_probs']
-    topk_hybrid_word_idx = hybrid_prob.squeeze().topk(5)[1].transpose(0, 1).tolist()
-    topk_hybrid_probs = hybrid_prob.squeeze().topk(5)[0].transpose(0, 1).tolist()
 
     lm_prob = data_for_visualization['lm_probs']
-    topk_lm_prob_word_idx = lm_prob.squeeze().topk(5)[1].transpose(0, 1).tolist()
-    topk_lm_prob_probs = lm_prob.squeeze().topk(5)[0].transpose(0, 1).tolist()
 
     gate = data_for_visualization['gate'].squeeze().tolist()
     gate.append(0)
     # gate_str = ' '.join(['{:>6.2f}'.format(i) for i in gate.squeeze().tolist()])
-
-    topk_to_persona_idx = to_persona_prob.squeeze().topk(10)[1].tolist()
-    topk_to_persona_concept = [id2keyword[i] for i in topk_to_persona_idx]
-    topk_to_persona_p = to_persona_prob.squeeze().topk(10)[0].tolist()
-    topk_to_persona_str = ' '.join(
-        ['{:>6}'.format(x) + '(' + str('{:.6f}'.format(y)) + ')' for x, y in
-         zip(topk_to_persona_concept, topk_to_persona_p)])
-
-    topk_from_context_idx = from_context_prob.squeeze().topk(10)[1].tolist()
-    topk_from_context_concept = [id2keyword[i] for i in topk_from_context_idx]
-    # topk_from_context_concept = dictionary.vec2txt(topk_from_context_idx, recover_bpe=True)
-    topk_from_context_p = from_context_prob.squeeze().topk(10)[0].tolist()
-    topk_from_context_str = ' '.join(
-        ['{:>6}'.format(x) + '(' + str('{:.6f}'.format(y)) + ')' for x, y in
-         zip(topk_from_context_concept, topk_from_context_p)])
-
-    concept_probs = (from_context_prob + to_persona_prob) / 2
-    topk_concept_idx = concept_probs.squeeze().topk(10)[1].tolist()
-    topk_concept = [id2keyword[i] for i in topk_concept_idx]
-    # topk_concept = [dict.tokenizer.decoder[i] for i in topk_concept_idx]
-    topk_context_p = concept_probs.squeeze().topk(10)[0].tolist()
-    topk_concept_str = ' '.join(
-        ['{:>6}'.format(x) + '(' + str('{:.6f}'.format(y)) + ')' for x, y in zip(topk_concept, topk_context_p)])
 
     for i in range(len(predictions)):
         # map the predictions back to non-empty examples in the batch
@@ -174,36 +148,53 @@ def generation_visualization(data_for_visualization, dict, valid_inds, batch_rep
         line_outputs = recover_bpe_encoding(dict.tokenizer.convert_ids_to_tokens(display_outputs))
         output_str = ' '.join(['{:>7}'.format(i) for i in line_outputs])
 
+        visualize_from_context_probs = visualize_topk_nodes_with_values(from_context_prob, id2keyword, k=10,
+                                                                        concept=True)
+        visualize_to_persona_probs = visualize_topk_nodes_with_values(to_persona_prob, id2keyword, k=10, concept=True)
+        visualize_concept_probs = visualize_topk_nodes_with_values(concept_probs, id2keyword, k=10, concept=True)
+
+        visualize_lm_probs = visualize_topk_nodes_with_values(lm_prob[i], dict, k=5, concept=False)
+        visualize_hb_probs = visualize_topk_nodes_with_values(hybrid_prob[i], dict, k=5, concept=False)
+
         print('=' * 150)
         print('TEXT: ', observations[valid_inds[i]]['text'])
-        print('FROM: {}'.format(topk_from_context_str))
-        print('TOPE: {}'.format(topk_to_persona_str))
-        print('CONC: {}'.format(topk_concept_str))
+        print('FROM: {}'.format(visualize_from_context_probs))
+        print('TOPE: {}'.format(visualize_to_persona_probs))
+        print('CONC: {}'.format(visualize_concept_probs))
         print('PRED: {}'.format(output_str))
-
         gate_str = ' '.join(['{:>7}'.format(w) + '(' + str('{:.4f}'.format(g)) + ')' for w, g in
                              zip(line_outputs, gate)])
 
         print('GATE: {}'.format(gate_str))
         print('LM & HYBR:')
-
-        for line_idx, line_probs in zip(topk_lm_prob_word_idx, topk_lm_prob_probs):
-            line_words = recover_bpe_encoding(dict.tokenizer.convert_ids_to_tokens(line_idx))
-            line = ' '.join(['{:>7}'.format(word) + '(' + str('{:.4f}'.format(prob)) + ')' for word, prob in
-                             zip(line_words, line_probs)])
-            print(line)
-
-        print('-' * 50)
-
-        for line_idx, line_probs in zip(topk_hybrid_word_idx, topk_hybrid_probs):
-            line_words = recover_bpe_encoding(dict.tokenizer.convert_ids_to_tokens(line_idx))
-            line = ' '.join(['{:>7}'.format(word) + '(' + str('{:.4f}'.format(prob)) + ')' for word, prob in
-                             zip(line_words, line_probs)])
-            print(line)
+        print('{}'.format(visualize_lm_probs))
+        print('-' * 150)
+        print('{}'.format(visualize_hb_probs))
 
     # print("predictions shape: {}".format(predictions.size()))
     # print("batch reply: {}".format(batch_reply))
     return
+
+
+def visualize_topk_nodes_with_values(tensor, vocab, k=10, concept=False):
+    visualization = ''
+    tensor = tensor.squeeze()
+    if len(tensor.size()) == 1:
+        idx = tensor.topk(k)[1].tolist()
+        if concept:
+            concepts = [vocab[i] for i in idx]
+            values = tensor.topk(10)[0].tolist()
+            visualization += ' '.join(
+                ['{:>6}'.format(c) + '(' + str('{:.3f}'.format(v)) + ')' for c, v in zip(concepts, values)])
+    else:
+        idx = tensor.topk(5)[1].transpose(0, 1).tolist()
+        values = tensor.topk(5)[0].transpose(0, 1).tolist()
+        for i, v in zip(idx, values):
+            words = recover_bpe_encoding(vocab.tokenizer.convert_ids_to_tokens(i))
+            line = ' '.join(['{:>7}'.format(word) + '(' + str('{:.4f}'.format(prob)) + ')'
+                             for word, prob in zip(words, v)])
+            visualization += (line + '\n')
+    return visualization
 
 
 def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax):

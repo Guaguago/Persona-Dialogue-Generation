@@ -50,7 +50,7 @@ if __name__ == '__main__':
         batchsize=10,
         beam_size=1,
         display_examples=True,
-        generate_samples=True
+        visualization=True
     )
     opt = parser.parse_args(print_args=False)
     eval_f1(opt, print_parser=parser)

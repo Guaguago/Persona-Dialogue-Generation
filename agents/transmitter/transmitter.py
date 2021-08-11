@@ -705,7 +705,7 @@ class TransformerAgent(Agent):
         return obs
 
     def predict(self, src_seq, src_seq_turn, src_seq_dis, tgt_seq=None, tgt_seq_turn=None, cands=None, valid_cands=None,
-                sampling_cands=None, is_training=False, idea_interface=None, generate_samples=False):
+                sampling_cands=None, is_training=False, idea_interface=None, visualization=False):
         """Produce a prediction from our model.
 
         Update the model using the targets if available, otherwise rank
@@ -804,11 +804,11 @@ class TransformerAgent(Agent):
                                      walk_probs=walk_probs,
                                      hybrid_weights=hybrid_weights,
                                      vocab_map=self.vocab_map,
-                                     generate_samples=generate_samples)
+                                     visualization=visualization)
             predictions, cand_preds = out[0], out[2]  # 生成example过程
             data_for_visualization = out[5]
 
-            if tgt_seq is not None and self.rank is False and generate_samples is False:
+            if tgt_seq is not None and self.rank is False and visualization is False:
                 # calculate loss on targets
                 out = self.model.forward(src_seq=src_seq,
                                          src_seq_turn=src_seq_turn,
@@ -974,7 +974,7 @@ class TransformerAgent(Agent):
                                                                        tgt_seq_turn, cands,
                                                                        cand_inds, sampling_cands, is_training,
                                                                        idea_interface=idea_dict,
-                                                                       generate_samples=self.opt['generate_samples'])
+                                                                       visualization=self.opt['visualization'])
 
         if is_training:
             report_freq = 0
