@@ -154,7 +154,7 @@ class Gpt2SeqModel(nn.Module):
             elif self.beam_size > 1:
                 # idea interface: modified
                 predictions, hidden_states = self.beam_search(batch_size, prior_context, walk_probs, jump_probs,
-                                                              hybrid_weights, word2concept_map)
+                                                              hybrid_weights, word2concept_map, concept2words_map)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
 
@@ -512,7 +512,8 @@ class Gpt2SeqModel(nn.Module):
         pred_output = pred_output[..., :score_output.shape[1]].contiguous()
         return pred_output, hybrid_probs, hidden_states
 
-    def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights, word2concept_map):
+    def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights,
+                    word2concept_map, concept2words_map):
         """
         beam search for the validating generation. Note we also impose the n-gram repeating, which is borrowed
         from https://github.com/pytorch/fairseq. The diversity is not useful here.
@@ -549,9 +550,10 @@ class Gpt2SeqModel(nn.Module):
                 #      kw_hidden_states], dim=-1)
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
 
-                hybrid_probs, _ = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map,
-                                                   lm_probs.unsqueeze(1), gate.unsqueeze(1),
-                                                   self.softmax, lm_mask=None)
+                hybrid_probs, _ = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights,
+                                                   word2concept_map, concept2words_map,
+                                                   logits.unsqueeze(1), gate.unsqueeze(1), self.softmax,
+                                                   lm_mask=None)
 
                 # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
                 # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs

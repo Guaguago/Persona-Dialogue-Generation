@@ -348,16 +348,16 @@ def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map, c
     prob_words_given_concept[:, :, 0:2] = 0
     num_3 = (prob_words_given_concept > 0.00000001).sum()
 
-    prob_words_concept = prob_words_given_concept * (prob_concept.unsqueeze(-1))
+    prob_words_concept = prob_words_given_concept * (prob_concept.unsqueeze(-1).unsqueeze(1))
 
     idx = concept2words_map.view(-1).unsqueeze(0).unsqueeze(0).expand(batch_size, output_len, -1).type(torch.int64)
     src = prob_words_concept.view(batch_size, output_len, -1)
     tgt = torch.zeros_like(lm_probs)
 
-    tgt.scatter_(dim=-1, index=idx, src=src)
+    final_probs = tgt.scatter(dim=-1, index=idx, src=src)
 
     hybrid_probs = cal_hybrid_probs_each_timestep(gate, tgt, lm_probs, lm_mask)
-    return hybrid_probs, tgt
+    return hybrid_probs, final_probs
 
 
 def cal_hybrid_probs_each_timestep(gate, concept_probs, lm_probs, lm_mask):
