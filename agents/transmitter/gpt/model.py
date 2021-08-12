@@ -313,7 +313,7 @@ class Gpt2SeqModel(nn.Module):
 
         if visualization:
             shift_logits = logits[..., src_seq_len:, :].contiguous()
-            lm_probs = self.softmax(shift_logits)
+            lm_probs = self.softmax(shift_logits / 1.5)
             gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:, :]))
             # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
             # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs

@@ -327,7 +327,7 @@ def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map, c
     assert len(gate.size()) == 3
     assert len(lm_logits.size()) == 3
 
-    lm_probs = softmax(lm_logits / 2.5)
+    lm_probs = softmax(lm_logits / 1.5)
     basic_concept_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
 
     logits = concept2word_mask * (lm_logits.unsqueeze(-2))
