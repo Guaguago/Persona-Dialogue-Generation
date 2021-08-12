@@ -321,22 +321,43 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     return probs
 
 
-def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map, concept2word_mask,
+def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map, concept2words_map,
                      lm_logits, gate, softmax, lm_mask=None):
     # jump or walk [10, 2680]
     assert len(gate.size()) == 3
     assert len(lm_logits.size()) == 3
 
-    lm_probs = softmax(lm_logits / 1.5)
-    basic_concept_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
+    batch_size = lm_logits.size(0)
+    output_len = lm_logits.size(1)
 
-    logits = concept2word_mask * (lm_logits.unsqueeze(-2))
-    logits = torch.where(logits.eq(0), torch.ones_like(logits) * -1e10, logits)
-    probs_given_concept = softmax(logits)
-    final_concept_probs = (basic_concept_probs.unsqueeze(1).unsqueeze(-1) * probs_given_concept).sum(-2)
+    lm_probs = softmax(lm_logits / 1.3)
+    prob_concept = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
 
-    hybrid_probs = cal_hybrid_probs_each_timestep(gate, final_concept_probs, lm_probs, lm_mask)
-    return hybrid_probs, final_concept_probs
+    concept2words_mask = concept2words_map.ne(0)
+    num = concept2words_mask.sum()
+    logits = torch.gather(lm_logits.unsqueeze(-2).expand(batch_size, output_len, 2680, -1), dim=-1,
+                          index=concept2words_map.type(torch.int64).unsqueeze(0).unsqueeze(0).expand(batch_size,
+                                                                                                     output_len, -1,
+                                                                                                     -1))
+
+    logits = logits * concept2words_mask
+    num_2 = logits.ne(0).sum()
+
+    logits = torch.where(logits.eq(0), torch.ones_like(logits) * -1e5, logits)
+    prob_words_given_concept = softmax(logits)
+    prob_words_given_concept[:, :, 0:2] = 0
+    num_3 = (prob_words_given_concept > 0.00000001).sum()
+
+    prob_words_concept = prob_words_given_concept * (prob_concept.unsqueeze(-1))
+
+    idx = concept2words_map.view(-1).unsqueeze(0).unsqueeze(0).expand(batch_size, output_len, -1).type(torch.int64)
+    src = prob_words_concept.view(batch_size, output_len, -1)
+    tgt = torch.zeros_like(lm_probs)
+
+    tgt.scatter_(dim=-1, index=idx, src=src)
+
+    hybrid_probs = cal_hybrid_probs_each_timestep(gate, tgt, lm_probs, lm_mask)
+    return hybrid_probs, tgt
 
 
 def cal_hybrid_probs_each_timestep(gate, concept_probs, lm_probs, lm_mask):
@@ -364,12 +385,20 @@ def cal_word2concept_map(dict, device):
     return torch.tensor(map).to(device)
 
 
-def cal_concept2word_mask(word_concept_map, device):
-    concept_word_mask = torch.cat(
-        [word_concept_map.eq(concept_id).unsqueeze(0) + 0 for concept_id in range(len(keyword2id))], dim=0)
-    concept_word_mask[0] = 0
-    assert (word_concept_map > 0).sum() == concept_word_mask.sum()
-    return concept_word_mask
+def cal_concept2word_map(word_concept_map, device):
+    lists = [[0.] * 7]
+    for i in range(1, 2680):
+        concept2words_idx = torch.where(word_concept_map.eq(i))[0]
+        lists.append(torch.cat([concept2words_idx, torch.zeros(7 - len(concept2words_idx)).to(device)]).tolist())
+    concept2word_map = torch.tensor(lists)
+    return concept2word_map.to(device)
+    # # list = [word_concept_map.eq(i).sum().item() for i in range(2680)]
+    # # max = torch.tensor(list).topk(10)[0]
+    # # concept_word_mask = torch.cat(
+    # #     [word_concept_map.eq(concept_id).unsqueeze(0) + 0 for concept_id in range(len(keyword2id))], dim=0)
+    # concept_word_mask[0] = 0
+    # assert (word_concept_map > 0).sum() == concept_word_mask.sum()
+    # return concept_word_mask
 
 
 def load_kw_model(load_kw_prediction_path, device, use_keywords=True):

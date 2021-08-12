@@ -23,7 +23,7 @@ from agents.transmitter.gpt.optim import GPTOptimizer
 from torch import autograd
 import json
 from agents.psquare.utils import LanguageModel
-from idea import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_mask
+from idea import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_map
 from idea import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model
 from idea import cal_word2concept_map, get_keyword_mask_matrix, get_kw_graph_distance_matrix
 from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs
@@ -384,7 +384,7 @@ class PSquareAgent(Agent):
 
             # idea interface
             self.word2concept_map = cal_word2concept_map(self.dict, self.device)
-            self.concept2word_mask = cal_concept2word_mask(self.word2concept_map, self.device)
+            self.concept2word_mask = cal_concept2word_map(self.word2concept_map, self.device)
 
             self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
             self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(

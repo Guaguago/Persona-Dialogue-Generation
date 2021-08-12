@@ -30,7 +30,7 @@ from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
 from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, cal_word2concept_map, \
-    visualize_samples, cal_concept2word_mask
+    visualize_samples, cal_concept2word_map
 from idea import get_keyword_mask_matrix, load_kw_model, get_kw_graph_distance_matrix
 from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs, cal_hybrid_probs_each_timestep
 from idea import prepare_example_persona_kws, prepare_batch_persona_kw_mask
@@ -296,7 +296,7 @@ class TransformerAgent(Agent):
             # idea interface
             self.device = shared['device']
             self.word2concept_map = shared['word2concept_map']
-            self.concept2word_mask = shared['concept2word_mask']
+            self.concept2words_map = shared['concept2words_map']
             self.kw_mask_matrix = shared['kw_mask_matrix']
             self.kw_graph_distance_matrix = shared['kw_graph_distance_matrix']
 
@@ -344,7 +344,7 @@ class TransformerAgent(Agent):
 
             # idea interface
             self.word2concept_map = cal_word2concept_map(self.dict, self.device)
-            self.concept2word_mask = cal_concept2word_mask(self.word2concept_map, self.device)
+            self.concept2words_map = cal_concept2word_map(self.word2concept_map, self.device)
 
             self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
             self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(
@@ -629,7 +629,7 @@ class TransformerAgent(Agent):
         # idea interface
         shared['device'] = self.device
         shared['word2concept_map'] = self.word2concept_map
-        shared['concept2word_mask'] = self.concept2word_mask
+        shared['concept2words_map'] = self.concept2words_map
         shared['kw_mask_matrix'] = self.kw_mask_matrix
         shared['kw_graph_distance_matrix'] = self.kw_graph_distance_matrix
 
@@ -751,7 +751,7 @@ class TransformerAgent(Agent):
                                          jump_probs=jump_probs,
                                          walk_probs=walk_probs,
                                          word2concept_map=self.word2concept_map,
-                                         concept2word_mask=self.concept2word_mask,
+                                         concept2words_map=self.concept2words_map,
                                          hybrid_weights=hybrid_weights)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
@@ -809,7 +809,7 @@ class TransformerAgent(Agent):
                                      walk_probs=walk_probs,
                                      hybrid_weights=hybrid_weights,
                                      word2concept_map=self.word2concept_map,
-                                     concept2word_mask=self.concept2word_mask,
+                                     concept2words_map=self.concept2words_map,
                                      visualization=visualization)
             predictions, cand_preds = out[0], out[2]  # 生成example过程
             data_for_visualization = out[5]
@@ -827,7 +827,7 @@ class TransformerAgent(Agent):
                                          walk_probs=walk_probs,
                                          hybrid_weights=hybrid_weights,
                                          word2concept_map=self.word2concept_map,
-                                         concept2word_mask=self.concept2word_mask)
+                                         concept2words_map=self.concept2words_map)
 
                 hybrid_probs = out[1]
 

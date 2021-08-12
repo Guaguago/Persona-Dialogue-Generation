@@ -67,7 +67,7 @@ class Gpt2SeqModel(nn.Module):
 
     def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
                 valid_cands=None, prev_enc=None, rank_during_training=False, sampling=False, sampling_cands=None,
-                walk_probs=None, jump_probs=None, word2concept_map=None, concept2word_mask=None, lm_mask=None,
+                walk_probs=None, jump_probs=None, word2concept_map=None, concept2words_map=None, lm_mask=None,
                 hybrid_weights=None, visualization=False):
         # concat src_seq and tgt_seq as one sentence, use start token to separate them.
         if tgt_seq is not None:
@@ -112,7 +112,7 @@ class Gpt2SeqModel(nn.Module):
             gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
 
             hybrid_probs, _ = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map,
-                                               concept2word_mask, shift_logits, gate,
+                                               concept2words_map, shift_logits, gate,
                                                self.softmax, lm_mask=None)
 
             pos_seq_len = src_seq_len + tgt_seq.ne(self.pad_idx).sum(dim=1, keepdim=True)
@@ -163,7 +163,7 @@ class Gpt2SeqModel(nn.Module):
                                                                                           prior_dis, walk_probs,
                                                                                           hybrid_weights, jump_probs,
                                                                                           word2concept_map,
-                                                                                          concept2word_mask,
+                                                                                          concept2words_map,
                                                                                           visualization)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
@@ -206,8 +206,9 @@ class Gpt2SeqModel(nn.Module):
                         cand_logits = cand_logits[..., src_seq_len:-1, :].contiguous()
                         gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
                         lm_probs = self.softmax(cand_logits)
-                        hybrid_probs = cal_hybrid_probs(walk_probs[ind].unsqueeze(0), jump_probs[ind].unsqueeze(0),
-                                                        hybrid_weights, vocab_map, lm_probs, gate, self.softmax)
+                        hybrid_probs, _ = cal_hybrid_probs(walk_probs[ind].unsqueeze(0), jump_probs[ind].unsqueeze(0),
+                                                           hybrid_weights, word2concept_map, lm_probs, gate,
+                                                           self.softmax)
                         hybrid_probs = hybrid_probs.clamp(min=1e-6)
                         # TODO: start -> I, I -> love, ... the -> world, [world -> EOS] (missing here), target is the
                         #  original sentence
@@ -238,7 +239,7 @@ class Gpt2SeqModel(nn.Module):
         return sequence_lengths
 
     def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, hybrid_weights, jump_probs,
-                        word2concept_map, concept2word_mask,
+                        word2concept_map, concept2words_map,
                         visualization=False):
         data_for_visualization = {}
         device = next(self.parameters()).device
@@ -262,7 +263,7 @@ class Gpt2SeqModel(nn.Module):
                 # kw_probs = self.softmax(
                 #     kw_probs.gather(-1, word2concept_map.unsqueeze(0).expand(lm_probs.size())) / 0.01)
                 hybrid_probs, _ = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights,
-                                                   word2concept_map, concept2word_mask,
+                                                   word2concept_map, concept2words_map,
                                                    last_logits.unsqueeze(1), gate.unsqueeze(1), self.softmax,
                                                    lm_mask=None)
 
@@ -313,7 +314,7 @@ class Gpt2SeqModel(nn.Module):
 
         if visualization:
             shift_logits = logits[..., src_seq_len:, :].contiguous()
-            lm_probs = self.softmax(shift_logits / 1.5)
+            lm_probs = self.softmax(shift_logits / 1.3)
             gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:, :]))
             # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
             # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
@@ -321,7 +322,7 @@ class Gpt2SeqModel(nn.Module):
             #     kw_probs.gather(-1, word2concept_map.unsqueeze(0).expand(lm_probs.size())) / 0.01)
 
             hybrid_probs, final_concept_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights,
-                                                                 word2concept_map, concept2word_mask,
+                                                                 word2concept_map, concept2words_map,
                                                                  shift_logits, gate,
                                                                  self.softmax, lm_mask=None)
             data_for_visualization['from_context_prob'] = walk_probs
