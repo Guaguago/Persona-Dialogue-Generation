@@ -73,6 +73,9 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
             kw_logits = (1 - batch_vocab_mask) * (
                 -5e4) + batch_vocab_mask * kw_logits  # (batch, vocab_size), masked logits
 
+    # if 0 != kw_logits.max() - kw_logits.min:
+    #     print()
+
     # top_kws = kw_logits.topk(3, dim=-1)[1]
     # (batch_size, 3), need to convert to vocab token id based on word2id
     return kw_logits, kw_hidden_states
@@ -322,7 +325,7 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
 
 
 def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map, concept2words_map,
-                     lm_logits, gate, softmax, lm_mask=None):
+                     lm_logits, gate, softmax, lm_mask=None, temperature=3.0):
     # jump or walk [10, 2680]
     assert len(gate.size()) == 3
     assert len(lm_logits.size()) == 3
@@ -330,7 +333,7 @@ def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map, c
     batch_size = lm_logits.size(0)
     output_len = lm_logits.size(1)
 
-    lm_probs = softmax(lm_logits / 3.0)
+    lm_probs = softmax(lm_logits / temperature)
     prob_concept = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
 
     concept2words_mask = concept2words_map.ne(0)
@@ -586,7 +589,7 @@ def load_pickle(path):
         return pickle.load(f)
 
 
-def walk_logits(logits):
+def walk_logits(logits, k):
     """
     Masks everything but the neighbors of the context concepts
     Used to mask logits such that e^-infinity -> 0 won't contribute to the
