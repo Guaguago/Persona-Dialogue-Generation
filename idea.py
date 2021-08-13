@@ -330,7 +330,7 @@ def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map, c
     batch_size = lm_logits.size(0)
     output_len = lm_logits.size(1)
 
-    lm_probs = softmax(lm_logits / 1.3)
+    lm_probs = softmax(lm_logits / 3.0)
     prob_concept = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
 
     concept2words_mask = concept2words_map.ne(0)
