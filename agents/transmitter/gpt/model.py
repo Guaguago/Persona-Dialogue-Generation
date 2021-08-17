@@ -6,8 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
 import os
-from idea import load_kw_model
-from idea import cal_hybrid_probs_each_timestep, cal_hybrid_probs
+from idea import load_kw_model, cal_concept_word_probs, cal_hybrid_word_probs
 
 
 class Gpt2SeqModel(nn.Module):
@@ -81,8 +80,8 @@ class Gpt2SeqModel(nn.Module):
             src_seq_dis = np.array(src_seq_dis)
 
         # evaluation return none scores
-        data_for_visualization = None
-        hybrid_probs = None
+        data_for_visualization = [{} for i in range(batch_size)]
+        hybrid_word_probs = None
         negative_score = None
         start_tensor = self.start_tensor.detach().expand(batch_size, 1)
         # whether training or evaluation
@@ -109,19 +108,30 @@ class Gpt2SeqModel(nn.Module):
             # lm labels should mask the source sentence language model
             shift_logits = lm_logits[..., src_seq_len:-1, :].contiguous()
 
+            lm_word_probs = self.softmax(shift_logits)
+            concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words_map,
+                                                        shift_logits, self.softmax)
             gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
 
-            hybrid_probs, _ = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map,
-                                               concept2words_map, shift_logits, gate,
-                                               self.softmax, lm_mask=None)
+            hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask)
 
             pos_seq_len = src_seq_len + tgt_seq.ne(self.pad_idx).sum(dim=1, keepdim=True)
             pos_seq_len_expand = pos_seq_len.unsqueeze(dim=2).repeat(1, 1, 768)
             last_state = hidden_states.gather(dim=1, index=pos_seq_len_expand).squeeze(dim=1)
             positive_score = self.linear(self.dropout(last_state))
 
-            predictions = hybrid_probs.argmax(dim=-1)
-            # predictions = shift_logits.argmax(dim=-1)
+            predictions = hybrid_word_probs.argmax(dim=-1)
+
+            if visualization:
+                for step in range(batch_size):
+                    data_for_visualization[step]['from_context_probs'] = walk_probs[step].squeeze()
+                    data_for_visualization[step]['to_persona_probs'] = jump_probs[step].squeeze()
+                    data_for_visualization[step]['hybrid_word_probs'] = hybrid_word_probs[step].squeeze()
+                    data_for_visualization[step]['prediction'] = predictions[step].squeeze()
+                    data_for_visualization[step]['gate'] = gate[step].squeeze()
+                    data_for_visualization[step]['lm_word_probs'] = self.softmax(shift_logits)[step].squeeze()
+                    data_for_visualization[step]['concept_word_probs'] = concept_word_probs[step].squeeze()
+
         else:
             prior_context = torch.cat([src_seq, start_tensor], dim=1)
             if self.use_dis and src_seq_dis is not None:
@@ -142,7 +152,7 @@ class Gpt2SeqModel(nn.Module):
             if sampling:  # 2 pegg for A
                 predictions, hybrid_probs, hidden_states = self.sample_decoding(batch_size, prior_context, prior_dis,
                                                                                 self.topk, walk_probs, jump_probs,
-                                                                                hybrid_weights, word2concept_map)
+                                                                                hybrid_weights, concept2words_map)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
             elif self.training:  # B generate in 2 pegg
@@ -153,8 +163,10 @@ class Gpt2SeqModel(nn.Module):
 
             elif self.beam_size > 1:
                 # idea interface: modified
-                predictions, hidden_states = self.beam_search(batch_size, prior_context, walk_probs, jump_probs,
-                                                              hybrid_weights, word2concept_map, concept2words_map)
+                predictions, hidden_states, data_for_visualization = self.beam_search(batch_size, prior_context,
+                                                                                      walk_probs, jump_probs,
+                                                                                      hybrid_weights, concept2words_map,
+                                                                                      1.0, visualization)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
 
@@ -162,7 +174,6 @@ class Gpt2SeqModel(nn.Module):
                 predictions, hidden_states, data_for_visualization = self.greedy_decoding(batch_size, prior_context,
                                                                                           prior_dis, walk_probs,
                                                                                           hybrid_weights, jump_probs,
-                                                                                          word2concept_map,
                                                                                           concept2words_map,
                                                                                           visualization)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
@@ -205,15 +216,19 @@ class Gpt2SeqModel(nn.Module):
                         #  so we ignore the score form last word -> EOS and EOS -> pad
                         cand_logits = cand_logits[..., src_seq_len:-1, :].contiguous()
                         gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
-                        lm_probs = self.softmax(cand_logits)
-                        hybrid_probs, _ = cal_hybrid_probs(walk_probs[ind].unsqueeze(0), jump_probs[ind].unsqueeze(0),
-                                                           hybrid_weights, word2concept_map, lm_probs, gate,
-                                                           self.softmax)
-                        hybrid_probs = hybrid_probs.clamp(min=1e-6)
+                        lm_word_probs = self.softmax(cand_logits)
+                        concept_word_probs = cal_concept_word_probs(walk_probs[ind].unsqueeze(0),
+                                                                    jump_probs[ind].unsqueeze(0), hybrid_weights,
+                                                                    concept2words_map, cand_logits, self.softmax)
+                        gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
+
+                        hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask=None)
+
+                        hybrid_word_probs = hybrid_word_probs.clamp(min=1e-6)
                         # TODO: start -> I, I -> love, ... the -> world, [world -> EOS] (missing here), target is the
                         #  original sentence
                         cand_label = current_cs
-                        true_score = hybrid_probs.log().gather(2, cand_label.unsqueeze(2))
+                        true_score = hybrid_word_probs.log().gather(2, cand_label.unsqueeze(2))
                         # true_score = F.log_softmax(cand_logits, dim=2).gather(2, cand_label.unsqueeze(2))
                         nonzero = current_cs.ne(self.pad_idx).float()
                         current_cs_score = (true_score.squeeze(2) * nonzero).sum(1)
@@ -232,15 +247,14 @@ class Gpt2SeqModel(nn.Module):
                     cand_scores = torch.cat(cand_scores, dim=0)
                     cand_preds = cand_scores.sort(1, True)[1]
 
-        return predictions, hybrid_probs, cand_preds, cand_scores, gate, data_for_visualization, positive_score, negative_score
+        return predictions, hybrid_word_probs, cand_preds, cand_scores, gate, data_for_visualization, positive_score, negative_score
 
     # TODO: we do not do any penalty
     def _length_penalty(self, sequence_lengths):
         return sequence_lengths
 
     def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, hybrid_weights, jump_probs,
-                        word2concept_map, concept2words_map,
-                        visualization=False):
+                        concept2words_map, visualization=False):
         data_for_visualization = {}
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
@@ -258,16 +272,13 @@ class Gpt2SeqModel(nn.Module):
 
                 ### idea interface ###
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
-                # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
-                # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
-                # kw_probs = self.softmax(
-                #     kw_probs.gather(-1, word2concept_map.unsqueeze(0).expand(lm_probs.size())) / 0.01)
-                hybrid_probs, _ = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights,
-                                                   word2concept_map, concept2words_map,
-                                                   last_logits.unsqueeze(1), gate.unsqueeze(1), self.softmax,
-                                                   lm_mask=None)
 
-                hybrid_probs = hybrid_probs.squeeze(1).clamp(min=1e-6)
+                lm_word_probs = self.softmax(last_logits)
+                concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights,
+                                                            concept2words_map, last_logits.unsqueeze(1), self.softmax)
+                hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(1), concept_word_probs,
+                                                          gate.unsqueeze(1), lm_mask=None)
+                hybrid_probs = hybrid_word_probs.squeeze(1).clamp(min=1e-6)
                 log_probs = torch.log(hybrid_probs)
 
                 if 0 < self.no_repeat_ngram_size < step:
@@ -314,7 +325,7 @@ class Gpt2SeqModel(nn.Module):
 
         if visualization:
             shift_logits = logits[..., src_seq_len:, :].contiguous()
-            lm_probs = self.softmax(shift_logits / 1.3)
+            lm_probs = self.softmax(shift_logits / 3.0)
             gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:, :]))
             # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
             # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
@@ -416,7 +427,7 @@ class Gpt2SeqModel(nn.Module):
         return pred_output, score_output, hidden_states
 
     def sample_decoding(self, batch_size, prior_context, prior_dis, topk,
-                        walk_probs, jump_probs, hybrid_weights, word2concept_map):
+                        walk_probs, jump_probs, hybrid_weights, concept2words_map):
         """
         This function is used to simulate the Learned Agent in self-play
         The parameter topk specifies the sampling space at each decoding step.
@@ -439,22 +450,16 @@ class Gpt2SeqModel(nn.Module):
             last_hiddens = hidden_states
             # logits, _ = self.transformer_module.forward(past)
             logits = logits[:, -1, :] / self.temperature
-            lm_probs = self.softmax(logits)
+            lm_word_probs = self.softmax(logits)
+            concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights,
+                                                        concept2words_map, logits.unsqueeze(1),
+                                                        self.softmax, temperature=1.0)
+            gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :])).unsqueeze(1)
 
-            nan = torch.isnan(lm_probs).sum()
+            hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(1), concept_word_probs, gate,
+                                                      lm_mask=None)
 
-            if nan > 0:
-                print('The num of inf in lm_probs: {}'.format(torch.isinf(lm_probs).sum()))
-                print('The num of inf in logits: {}'.format(torch.isinf(logits).sum()))
-                print('Top 10 of logits: {}'.format(logits[0].topk(10)[0]))
-                print('Top 10 of lm_probs: {}'.format(lm_probs[0].topk(10)[0]))
-
-            gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
-
-            hybrid_probs, _ = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map,
-                                               lm_probs.unsqueeze(1),
-                                               gate.unsqueeze(1), self.softmax)
-            hybrid_probs = hybrid_probs.squeeze(1)
+            hybrid_word_probs = hybrid_word_probs.squeeze(1)
 
             # add score
             # logits = top_k_logits(logits, k=topk)
@@ -469,7 +474,7 @@ class Gpt2SeqModel(nn.Module):
                         gen_ngrams[bbsz_idx][tuple(ngram[:-1])] = \
                             gen_ngrams[bbsz_idx].get(tuple(ngram[:-1]), []) + [ngram[-1]]
 
-            predict_tok = torch.multinomial(hybrid_probs, num_samples=1)
+            predict_tok = torch.multinomial(hybrid_word_probs, num_samples=1)
             # must one (including END)
             # look forward one step
             pred_output[:, step] = predict_tok.view(-1)
@@ -488,9 +493,9 @@ class Gpt2SeqModel(nn.Module):
                     banned_tokens = [[] for _ in range(batch_size)]
 
                 for bbsz_idx in range(batch_size):
-                    hybrid_probs[bbsz_idx, banned_tokens[bbsz_idx]] = 0.0
+                    hybrid_word_probs[bbsz_idx, banned_tokens[bbsz_idx]] = 0.0
 
-                predict_tok = torch.multinomial(hybrid_probs, num_samples=1)
+                predict_tok = torch.multinomial(hybrid_word_probs, num_samples=1)
                 # look forward one step
                 pred_output[:, step] = predict_tok.view(-1)
 
@@ -504,22 +509,26 @@ class Gpt2SeqModel(nn.Module):
                 break
         score_output = last_logits[..., src_len:, :].contiguous()
         last_hiddens = last_hiddens[..., src_len:, :].contiguous()
+
+        lm_word_probs = self.softmax(score_output)
+        concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words_map,
+                                                    score_output, self.softmax, temperature=1.0)
         gate = self.sigmoid(self.gate_linear(last_hiddens))
-        lm_probs = self.softmax(score_output)
-        hybrid_probs, _ = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map, lm_probs, gate,
-                                           self.softmax)
+
+        hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask=None)
 
         pred_output = pred_output[..., :score_output.shape[1]].contiguous()
-        return pred_output, hybrid_probs, hidden_states
+        return pred_output, hybrid_word_probs, hidden_states
 
     def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights,
-                    word2concept_map, concept2words_map):
+                    concept2words_map, temperature, visualization=False):
         """
         beam search for the validating generation. Note we also impose the n-gram repeating, which is borrowed
         from https://github.com/pytorch/fairseq. The diversity is not useful here.
         """
         device = next(self.parameters()).device
-
+        src_seq_len = prior_context.size(-1)
+        data_for_visualization = [{} for i in range(batch_size)]
         beam_scores = torch.zeros(batch_size, self.beam_size, device=device)
         beam_lens = torch.ones(batch_size, self.beam_size, dtype=torch.long, device=device)
         is_end = torch.zeros(batch_size, self.beam_size, dtype=torch.bool, device=device)
@@ -535,30 +544,19 @@ class Gpt2SeqModel(nn.Module):
             start_token_tensor = prior_context.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             jump_probs = jump_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             walk_probs = walk_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
-            # kw_hidden_states = kw_hidden_states.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
 
             token_tensor = start_token_tensor
             for step in range(self.longest_label):
                 outputs, hidden_states = self.transformer_module.forward(token_tensor)
-
                 logits = outputs[:, -1, :]
-                lm_probs = self.softmax(logits)
-                # gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
 
-                # gate_hidden_states = torch.cat(
-                #     [hidden_states[:, -1, :],
-                #      kw_hidden_states], dim=-1)
-                gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
-
-                hybrid_probs, _ = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights,
-                                                   word2concept_map, concept2words_map,
-                                                   logits.unsqueeze(1), gate.unsqueeze(1), self.softmax,
-                                                   lm_mask=None)
-
-                # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
-                # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
-
-                log_probs = torch.log(hybrid_probs.squeeze(1))
+                lm_word_probs = self.softmax(logits / temperature)
+                concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights,
+                                                            concept2words_map, logits.unsqueeze(1), self.softmax)
+                gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :])).unsqueeze(1)
+                hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(1), concept_word_probs, gate,
+                                                          lm_mask=None)
+                log_probs = torch.log(hybrid_word_probs.squeeze(1))
 
                 if 0 < self.no_repeat_ngram_size < step:
                     # for each beam and batch sentence, generate a list of previous ngrams
@@ -664,12 +662,41 @@ class Gpt2SeqModel(nn.Module):
 
             bests = beam_scores.argmax(dim=-1)
 
+            if visualization:
+                logits = outputs.view(batch_size, self.beam_size, -1, 40516)
+                hidden_states = hidden_states.view(batch_size, self.beam_size, -1, 768)
+                walk_probs = walk_probs.view(batch_size, self.beam_size, 2680)
+                jump_probs = jump_probs.view(batch_size, self.beam_size, 2680)
+
             for step in range(batch_size):
                 best_len = beam_lens[step, bests[step]]
                 best_seq = result[step, bests[step], 1:best_len - 1]
+
                 predicts.append(best_seq.tolist())
 
-        return predicts, hidden_states
+                if visualization:
+                    best_logits = logits[step, bests[step], src_seq_len - 1: src_seq_len + best_len - 3, :]
+                    best_hidden_states = hidden_states[step, bests[step], src_seq_len - 1: src_seq_len + best_len - 3,
+                                         :]
+                    best_walk_probs = walk_probs[step, bests[step], :].unsqueeze(0)
+                    best_jump_probs = jump_probs[step, bests[step], :].unsqueeze(0)
+                    lm_word_probs = self.softmax(best_logits / temperature)
+                    concept_word_probs = cal_concept_word_probs(best_walk_probs, best_jump_probs, hybrid_weights,
+                                                                concept2words_map, best_logits.unsqueeze(0),
+                                                                self.softmax)
+                    gate = self.sigmoid(self.gate_linear(best_hidden_states).unsqueeze(0))
+                    hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(0), concept_word_probs, gate,
+                                                              lm_mask=None)
+
+                    data_for_visualization[step]['from_context_probs'] = best_walk_probs.squeeze()
+                    data_for_visualization[step]['to_persona_probs'] = best_jump_probs.squeeze()
+                    data_for_visualization[step]['hybrid_word_probs'] = hybrid_word_probs.squeeze()
+                    data_for_visualization[step]['prediction'] = best_seq
+                    data_for_visualization[step]['gate'] = gate.squeeze()
+                    data_for_visualization[step]['lm_word_probs'] = lm_word_probs.squeeze()
+                    data_for_visualization[step]['concept_word_probs'] = concept_word_probs.squeeze()
+
+        return predicts, hidden_states, data_for_visualization
 
     def score_sentence(self, receive_tokens, send_tokens):
         """

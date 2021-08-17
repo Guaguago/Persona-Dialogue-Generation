@@ -101,3 +101,17 @@ class GPTDictionaryAgent(DictionaryAgent):
             toks = recover_bpe_encoding(toks)
         # toks = ['{:>5}'.format(i) for i in toks]
         return ' '.join(toks)
+
+    def vec2words(self, tensor_list, recover_bpe=False):
+        if isinstance(tensor_list[0], torch.Tensor):
+            idxs = [idx.cpu().item() for idx in tensor_list]
+        else:
+            idxs = list(tensor_list)
+        # filter unk ids
+        max_vocab_size = len(self.tokenizer.decoder) + len(self.special_tokens)
+        idxs = [self.pad_idx if idx >= max_vocab_size else idx for idx in idxs]
+        toks = self.tokenizer.convert_ids_to_tokens(idxs)
+        if recover_bpe:
+            toks = recover_bpe_encoding(toks)
+        # toks = ['{:>5}'.format(i) for i in toks]
+        return [i.replace('</w>', '') for i in toks]

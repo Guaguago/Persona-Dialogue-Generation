@@ -81,112 +81,50 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
     return kw_logits, kw_hidden_states
 
 
-def visualize_samples(data_for_visualization, dict, valid_inds, batch_reply,
-                      observations, dictionary, end_idx, report_freq=0.1,
-                      labels=None, answers=None, ys=None):
-    """Predictions are mapped back to appropriate indices in the batch_reply
-       using valid_inds.
-       report_freq -- how often we report predictions
-    """
+def visualize_samples(data_for_visualization, dict, valid_inds, observations):
+    for i in range(len(data_for_visualization)):
+        prediction = data_for_visualization[i]['prediction']
+        from_context_probs = data_for_visualization[i]['from_context_probs']
+        to_persona_probs = data_for_visualization[i]['to_persona_probs']
+        concept_probs = (from_context_probs + to_persona_probs) / 2
+        concept_word_probs = data_for_visualization[i]['concept_word_probs']
+        hybrid_word_probs = data_for_visualization[i]['hybrid_word_probs']
+        lm_word_probs = data_for_visualization[i]['lm_word_probs']
+        gate = data_for_visualization[i]['gate'].squeeze(-1).tolist()
 
-    predictions = data_for_visualization['prediction']
-    from_context_prob = data_for_visualization['from_context_prob']
-    to_persona_prob = data_for_visualization['to_persona_prob']
-    concept_probs = (from_context_prob + to_persona_prob) / 2
-    final_concept_probs = data_for_visualization['final_concept_probs']
-    hybrid_prob = data_for_visualization['hybrid_probs']
-
-    lm_prob = data_for_visualization['lm_probs']
-
-    gate = data_for_visualization['gate'].squeeze().tolist()
-    gate.append(0)
-    # gate_str = ' '.join(['{:>6.2f}'.format(i) for i in gate.squeeze().tolist()])
-
-    for i in range(len(predictions)):
-        # map the predictions back to non-empty examples in the batch
-        # we join with spaces since we produce tokens one at a timelab
-        curr = batch_reply[valid_inds[i]]
-        output_tokens = []
-        j = 0
-        for c in predictions[i]:
-            if c == end_idx and j != 0:
-                break
-            else:
-                output_tokens.append(c)
-            j += 1
-        if len(output_tokens) == 0:
-            output_tokens.append(3)
-        if dictionary.default_tok == 'bpe':
-            # TODO: judge whether the dictionary has method including parameter recover_bpe
-            try:
-                curr_pred = dictionary.vec2txt(output_tokens, recover_bpe=True)
-            except Exception as e:
-                print("You are using BPE decoding but do not recover them in prediction. "
-                      "You should support the interface `vec2txt(tensors, recover_bpe)` in your custom dictionary.")
-                print("Error Message:\n {}".format(e))
-                curr_pred = dictionary.vec2txt(output_tokens)
-        else:
-            curr_pred = dictionary.vec2txt(output_tokens)
-
-        if curr_pred == '':
-            print("Got Error: \n")
-            print("output tokens {} length: {}".format(i, len(output_tokens)))
-            print("predictions: {} ".format(predictions))
-            curr_pred = 'hello how are you today'
-
-        curr['text'] = curr_pred
-
-        if labels is not None and answers is not None and ys is not None:
-            y = []
-            for c in ys[i]:
-                if c == end_idx:
-                    break
-                else:
-                    y.append(c)
-            answers[valid_inds[i]] = y
-        elif answers is not None:
-            answers[valid_inds[i]] = curr_pred
-
-        display_outputs = [i.item() for i in output_tokens]
-        line_outputs = recover_bpe_encoding(dict.tokenizer.convert_ids_to_tokens(display_outputs))
-        output_str = ' '.join(['{:>7}'.format(i) for i in line_outputs])
-
-        visualize_from_context_probs = visualize_topk_nodes_with_values(from_context_prob, id2keyword, k=10,
-                                                                        concept=True)
-        visualize_to_persona_probs = visualize_topk_nodes_with_values(to_persona_prob, id2keyword, k=10, concept=True)
-        visualize_concept_probs = visualize_topk_nodes_with_values(concept_probs, id2keyword, k=10, concept=True)
-
-        visualize_lm_probs = visualize_topk_nodes_with_values(lm_prob[i], dict, k=5, concept=False)
-        visualize_final_concept_probs = visualize_topk_nodes_with_values(final_concept_probs[i], dict, k=5,
-                                                                         concept=False)
-        visualize_hb_probs = visualize_topk_nodes_with_values(hybrid_prob[i], dict, k=5, concept=False)
-
+        #  construct visulization strings
+        line_outputs = dict.vec2words(prediction.tolist())
+        vis_prediction = ' '.join(['{:>5}'.format(i) for i in line_outputs])
+        vis_from_context_probs = visualize_topk_nodes_with_values(from_context_probs, id2keyword, k=8, concept=True)
+        vis_to_persona_probs = visualize_topk_nodes_with_values(to_persona_probs, id2keyword, k=8, concept=True)
+        vis_concept_probs = visualize_topk_nodes_with_values(concept_probs, id2keyword, k=8, concept=True)
+        vis_lm_word_probs = visualize_topk_nodes_with_values(lm_word_probs, dict, k=5, concept=False, matrix=True)
+        vis_concept_word_probs = visualize_topk_nodes_with_values(concept_word_probs, dict, k=5, concept=False,
+                                                                  matrix=True)
+        vis_hybrid_word_probs = visualize_topk_nodes_with_values(hybrid_word_probs, dict, k=5, concept=False,
+                                                                 matrix=True)
         print('=' * 150)
         print('TEXT: ', observations[valid_inds[i]]['text'])
-        print('FROM: {}'.format(visualize_from_context_probs))
-        print('TOPE: {}'.format(visualize_to_persona_probs))
-        print('CONC: {}'.format(visualize_concept_probs))
-        print('PRED: {}'.format(output_str))
+        print('FROM: {}'.format(vis_from_context_probs))
+        print('TOPE: {}'.format(vis_to_persona_probs))
+        print('CONC: {}'.format(vis_concept_probs))
+        print('PRED: {}'.format(vis_prediction))
         gate_str = ' '.join(['{:>7}'.format(w) + '(' + str('{:.4f}'.format(g)) + ')' for w, g in
                              zip(line_outputs, gate)])
-
         print('GATE: {}'.format(gate_str))
         print('LM & HYBR:')
-        print('{}'.format(visualize_lm_probs))
+        print('{}'.format(vis_lm_word_probs))
         print('-' * 150)
-        print('{}'.format(visualize_final_concept_probs))
+        print('{}'.format(vis_concept_word_probs))
         print('-' * 150)
-        print('{}'.format(visualize_hb_probs))
+        print('{}'.format(vis_hybrid_word_probs))
 
-    # print("predictions shape: {}".format(predictions.size()))
-    # print("batch reply: {}".format(batch_reply))
     return
 
 
-def visualize_topk_nodes_with_values(tensor, vocab, k=10, concept=False):
+def visualize_topk_nodes_with_values(tensor, vocab, k=10, concept=False, matrix=False):
     visualization = ''
-    tensor = tensor.squeeze()
-    if len(tensor.size()) == 1:
+    if matrix is False:
         idx = tensor.topk(k)[1].tolist()
         if concept:
             concepts = [vocab[i] for i in idx]
@@ -194,10 +132,10 @@ def visualize_topk_nodes_with_values(tensor, vocab, k=10, concept=False):
             visualization += ' '.join(
                 ['{:>6}'.format(c) + '(' + str('{:.3f}'.format(v)) + ')' for c, v in zip(concepts, values)])
     else:
-        idx = tensor.topk(5)[1].transpose(0, 1).tolist()
+        idx = torch.topk(tensor, 5, dim=-1)[1].transpose(0, 1).tolist()
         values = tensor.topk(5)[0].transpose(0, 1).tolist()
         for i, v in zip(idx, values):
-            words = recover_bpe_encoding(vocab.tokenizer.convert_ids_to_tokens(i))
+            words = vocab.vec2words(i)
             line = ' '.join(['{:>9}'.format(word) + '(' + str('{:.6f}'.format(prob)) + ')'
                              for word, prob in zip(words, v)])
             visualization += (line + '\n')
@@ -324,51 +262,44 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     return probs
 
 
-def cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights, word2concept_map, concept2words_map,
-                     lm_logits, gate, softmax, lm_mask=None, temperature=3.0):
-    # jump or walk [10, 2680]
-    assert len(gate.size()) == 3
+def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words_map, lm_logits, softmax):
     assert len(lm_logits.size()) == 3
+    assert len(walk_probs.size()) == 2
 
     batch_size = lm_logits.size(0)
     output_len = lm_logits.size(1)
-
-    lm_probs = softmax(lm_logits / temperature)
-    prob_concept = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
-
+    concept_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
     concept2words_mask = concept2words_map.ne(0)
-    num = concept2words_mask.sum()
-    logits = torch.gather(lm_logits.unsqueeze(-2).expand(batch_size, output_len, 2680, -1), dim=-1,
-                          index=concept2words_map.type(torch.int64).unsqueeze(0).unsqueeze(0).expand(batch_size,
-                                                                                                     output_len, -1,
-                                                                                                     -1))
+    concept_word_logits = torch.gather(lm_logits.unsqueeze(-2).expand(batch_size, output_len, 2680, -1), dim=-1,
+                                       index=concept2words_map.type(torch.int64).unsqueeze(0).unsqueeze(0).expand(
+                                           batch_size, output_len, -1, -1))
+    concept_word_logits2 = concept_word_logits * concept2words_mask
+    concept_word_logits3 = torch.where(concept_word_logits2.eq(0), torch.ones_like(concept_word_logits2) * -1e5,
+                                       concept_word_logits2)
+    word_probs_given_concept = softmax(concept_word_logits3)
+    # word_probs_given_concept[:, :, 0:2] = 0
 
-    logits = logits * concept2words_mask
-    num_2 = logits.ne(0).sum()
+    concept_word_probs = word_probs_given_concept * (concept_probs.unsqueeze(-1).unsqueeze(1))
 
-    logits = torch.where(logits.eq(0), torch.ones_like(logits) * -1e5, logits)
-    prob_words_given_concept = softmax(logits)
-    prob_words_given_concept[:, :, 0:2] = 0
-    num_3 = (prob_words_given_concept > 0.00000001).sum()
-
-    prob_words_concept = prob_words_given_concept * (prob_concept.unsqueeze(-1).unsqueeze(1))
-
+    # map to the word vocab
     idx = concept2words_map.view(-1).unsqueeze(0).unsqueeze(0).expand(batch_size, output_len, -1).type(torch.int64)
-    src = prob_words_concept.view(batch_size, output_len, -1)
-    tgt = torch.zeros_like(lm_probs)
-
+    src = concept_word_probs.view(batch_size, output_len, -1)
+    tgt = torch.zeros_like(lm_logits)
     final_probs = tgt.scatter(dim=-1, index=idx, src=src)
 
-    hybrid_probs = cal_hybrid_probs_each_timestep(gate, tgt, lm_probs, lm_mask)
-    return hybrid_probs, final_probs
+    return final_probs
 
 
-def cal_hybrid_probs_each_timestep(gate, concept_probs, lm_probs, lm_mask):
-    # for gate only optimize examples with keywords in the response
+def cal_hybrid_word_probs(word_probs, concept_word_probs, gate, lm_mask):
+    # jump or walk [10, 2680]
+    assert len(gate.size()) == 3
+    assert len(word_probs.size()) == 3
+
+    # for gate only optimize examples with concepts in the response
     if lm_mask is not None:
-        hybrid_probs = lm_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(1) * concept_probs
+        hybrid_probs = word_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(1) * concept_word_probs
     else:
-        hybrid_probs = lm_probs * (1 - gate) + gate * concept_probs
+        hybrid_probs = word_probs * (1 - gate) + gate * concept_word_probs
     return hybrid_probs
 
 
@@ -595,6 +526,11 @@ def walk_logits(logits, k):
     Used to mask logits such that e^-infinity -> 0 won't contribute to the
     sum of the denominator.
     """
+    # d = 2 / ((1 + k) * k)
+    # p = [i * d for i in range(1, k + 1)]
+    # pp = torch.tensor(p).unsqueeze(0).expand(logits.size(0), -1)
+    # idx = torch.topk(logits, k)[1]
+    # probs = torch.scatter(input=torch.zeros_like(logits), dim=-1, index=idx, src=pp)
     logits = torch.where(logits == 0.0, torch.ones_like(logits) * -1e10, logits)
     return logits
 

@@ -31,8 +31,8 @@ from agents.common.gpt_dictionary import GPTDictionaryAgent
 # idea interface
 from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, cal_word2concept_map, \
     visualize_samples, cal_concept2word_map
-from idea import get_keyword_mask_matrix, load_kw_model, get_kw_graph_distance_matrix
-from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs, cal_hybrid_probs_each_timestep
+from idea import get_keyword_mask_matrix, get_kw_graph_distance_matrix
+from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs
 from idea import prepare_example_persona_kws, prepare_batch_persona_kw_mask
 
 # lstm, transformer, gpt2
@@ -731,6 +731,9 @@ class TransformerAgent(Agent):
         gate_label = for_gate['gate_label']
         gate_mask = for_gate['gate_mask']
 
+        if random.random() > 0.7:
+            visualization = True
+
         if is_training:
             self.model.train()
             self.zero_grad()
@@ -752,9 +755,10 @@ class TransformerAgent(Agent):
                                          walk_probs=walk_probs,
                                          word2concept_map=self.word2concept_map,
                                          concept2words_map=self.concept2words_map,
-                                         hybrid_weights=hybrid_weights)
+                                         hybrid_weights=hybrid_weights,
+                                         visualization=visualization)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
-                _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
+                _preds, hybrid_probs, cand_preds, gate, data_for_visualization = out[0], out[1], out[2], out[4], out[5]
 
                 positive_score, negative_score = out[-2], out[-1]
 
@@ -814,7 +818,7 @@ class TransformerAgent(Agent):
             predictions, cand_preds = out[0], out[2]  # 生成example过程
             data_for_visualization = out[5]
 
-            if tgt_seq is not None and self.rank is False and visualization is False:
+            if tgt_seq is not None and self.rank is False:
                 # calculate loss on targets
                 out = self.model.forward(src_seq=src_seq,
                                          src_seq_turn=src_seq_turn,
@@ -993,12 +997,8 @@ class TransformerAgent(Agent):
                 self.dict, self.END_IDX, report_freq=report_freq, labels=labels,
                 answers=self.answers, ys=tgt_seq.data if tgt_seq is not None else None)
 
-        if data_for_visualization is not None:
-            visualize_samples(
-                data_for_visualization, self.dict,
-                valid_inds, batch_reply, observations,
-                self.dict, self.END_IDX, report_freq=report_freq, labels=labels,
-                answers=self.answers, ys=tgt_seq.data if tgt_seq is not None else None)
+        if len(data_for_visualization[0]) > 0:
+            visualize_samples(data_for_visualization, self.dict, valid_inds, observations)
 
         if cand_preds is not None:
             if valid_cands is None:
