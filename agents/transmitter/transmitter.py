@@ -715,7 +715,7 @@ class TransformerAgent(Agent):
         Update the model using the targets if available, otherwise rank
         candidates as well if they are available and param is set.
         """
-        predictions, cand_preds = None, None
+        predictions, cand_preds, data_for_visualization = None, None, None
         # idea interface: for both train and generation codes.
         for_kw_model = idea_interface['for_kw_model']
         persona_kw_mask = idea_interface['persona_kw_mask']
