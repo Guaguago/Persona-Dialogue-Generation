@@ -716,7 +716,6 @@ class TransformerAgent(Agent):
         candidates as well if they are available and param is set.
         """
         predictions, cand_preds = None, None
-        data_for_visualization = None
         # idea interface: for both train and generation codes.
         for_kw_model = idea_interface['for_kw_model']
         persona_kw_mask = idea_interface['persona_kw_mask']

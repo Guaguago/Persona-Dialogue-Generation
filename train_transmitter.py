@@ -143,7 +143,7 @@ def setup_args():
         tensorboard_tag='exp',
         train_report_metrics='ppl,f1,hits@1',
         tensorboard_metrics='ppl,f1,hits@1',
-        visualization=True
+        visualization=False
     )
     return parser
 
