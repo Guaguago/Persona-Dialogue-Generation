@@ -1,6 +1,6 @@
 from nltk.util import ngrams
 import nltk
-
+import random
 from agents.common.gpt_dictionary import recover_bpe_encoding
 
 nltk.data.path.append('/apdcephfs/share_916081/chencxu/pegg/data/nltk_data')
@@ -82,42 +82,42 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
 
 
 def visualize_samples(data_for_visualization, dict, valid_inds, observations):
-    for i in range(len(data_for_visualization)):
-        prediction = data_for_visualization[i]['prediction']
-        from_context_probs = data_for_visualization[i]['from_context_probs']
-        to_persona_probs = data_for_visualization[i]['to_persona_probs']
-        concept_probs = (from_context_probs + to_persona_probs) / 2
-        concept_word_probs = data_for_visualization[i]['concept_word_probs']
-        hybrid_word_probs = data_for_visualization[i]['hybrid_word_probs']
-        lm_word_probs = data_for_visualization[i]['lm_word_probs']
-        gate = data_for_visualization[i]['gate'].squeeze(-1).tolist()
+    i = random.randint(0, len(data_for_visualization) - 1)
+    prediction = data_for_visualization[i]['prediction']
+    from_context_probs = data_for_visualization[i]['from_context_probs']
+    to_persona_probs = data_for_visualization[i]['to_persona_probs']
+    concept_probs = (from_context_probs + to_persona_probs) / 2
+    concept_word_probs = data_for_visualization[i]['concept_word_probs']
+    hybrid_word_probs = data_for_visualization[i]['hybrid_word_probs']
+    lm_word_probs = data_for_visualization[i]['lm_word_probs']
+    gate = data_for_visualization[i]['gate'].squeeze(-1).tolist()
 
-        #  construct visulization strings
-        line_outputs = dict.vec2words(prediction.tolist())
-        vis_prediction = ' '.join(['{:>5}'.format(i) for i in line_outputs])
-        vis_from_context_probs = visualize_topk_nodes_with_values(from_context_probs, id2keyword, k=8, concept=True)
-        vis_to_persona_probs = visualize_topk_nodes_with_values(to_persona_probs, id2keyword, k=8, concept=True)
-        vis_concept_probs = visualize_topk_nodes_with_values(concept_probs, id2keyword, k=8, concept=True)
-        vis_lm_word_probs = visualize_topk_nodes_with_values(lm_word_probs, dict, k=5, concept=False, matrix=True)
-        vis_concept_word_probs = visualize_topk_nodes_with_values(concept_word_probs, dict, k=5, concept=False,
-                                                                  matrix=True)
-        vis_hybrid_word_probs = visualize_topk_nodes_with_values(hybrid_word_probs, dict, k=5, concept=False,
-                                                                 matrix=True)
-        print('=' * 150)
-        print('【TEXT】{}'.format(observations[valid_inds[i]]['text']))
-        print('【FROM】{}'.format(vis_from_context_probs))
-        print('【TOPE】{}'.format(vis_to_persona_probs))
-        print('【CONC】{}'.format(vis_concept_probs))
-        print('【PRED】{}'.format(vis_prediction))
-        gate_str = ' '.join(['{:>7}'.format(w) + '(' + str('{:.4f}'.format(g)) + ')' for w, g in
-                             zip(line_outputs, gate)])
-        print('【GATE】{}'.format(gate_str))
-        print('------------------ 【LM Word Probs】 -----------------------')
-        print('{}'.format(vis_lm_word_probs))
-        print('------------------ 【Concept Word Probs】 ------------------')
-        print('{}'.format(vis_concept_word_probs))
-        print('------------------ 【Hybrid Word Probs】 -------------------')
-        print('{}'.format(vis_hybrid_word_probs))
+    #  construct visulization strings
+    line_outputs = dict.vec2words(prediction.tolist())
+    vis_prediction = ' '.join(['{:>5}'.format(i) for i in line_outputs])
+    vis_from_context_probs = visualize_topk_nodes_with_values(from_context_probs, id2keyword, k=8, concept=True)
+    vis_to_persona_probs = visualize_topk_nodes_with_values(to_persona_probs, id2keyword, k=8, concept=True)
+    vis_concept_probs = visualize_topk_nodes_with_values(concept_probs, id2keyword, k=8, concept=True)
+    vis_lm_word_probs = visualize_topk_nodes_with_values(lm_word_probs, dict, k=5, concept=False, matrix=True)
+    vis_concept_word_probs = visualize_topk_nodes_with_values(concept_word_probs, dict, k=5, concept=False,
+                                                              matrix=True)
+    vis_hybrid_word_probs = visualize_topk_nodes_with_values(hybrid_word_probs, dict, k=5, concept=False,
+                                                             matrix=True)
+    print('=' * 150)
+    print('【TEXT】{}'.format(observations[valid_inds[i]]['text']))
+    print('【FROM】{}'.format(vis_from_context_probs))
+    print('【TOPE】{}'.format(vis_to_persona_probs))
+    print('【CONC】{}'.format(vis_concept_probs))
+    print('【PRED】{}'.format(vis_prediction))
+    gate_str = ' '.join(['{:>7}'.format(w) + '(' + str('{:.4f}'.format(g)) + ')' for w, g in
+                         zip(line_outputs, gate)])
+    print('【GATE】{}'.format(gate_str))
+    print('------------------ 【LM Word Probs】 -----------------------')
+    print('{}'.format(vis_lm_word_probs))
+    print('------------------ 【Concept Word Probs】 ------------------')
+    print('{}'.format(vis_concept_word_probs))
+    print('------------------ 【Hybrid Word Probs】 -------------------')
+    print('{}'.format(vis_hybrid_word_probs))
 
     return
 
@@ -262,7 +262,8 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     return probs
 
 
-def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, topk, concept2words_map, lm_logits, softmax):
+def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, topk, concept2words_map, lm_logits, softmax,
+                           use_lm_logits=True):
     assert len(lm_logits.size()) == 3
     assert len(walk_probs.size()) == 2
 
@@ -285,19 +286,31 @@ def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, topk, concept
                                        index=topk_concept2words_map.type(torch.int64).unsqueeze(1).expand(
                                            batch_size, output_len, topk, -1))
     concept_word_logits2 = concept_word_logits * topk_concept2words_mask.unsqueeze(1).expand(-1, output_len, -1, -1)
-    concept_word_logits3 = torch.where(concept_word_logits2.eq(0), torch.ones_like(concept_word_logits2) * -1e10,
-                                       concept_word_logits2)
-    word_probs_given_concept = softmax(concept_word_logits3)
-    # word_probs_given_concept[:, :, 0:2] = 0
 
-    concept_word_probs = word_probs_given_concept * (topk_concept_probs.unsqueeze(-1).unsqueeze(1))
+    if use_lm_logits:
+        # map to the word vocab
+        idx = topk_concept2words_map.unsqueeze(1).expand(-1, output_len, -1, -1).view(batch_size, output_len, -1).type(
+            torch.int64)
+        src = concept_word_logits2.view(batch_size, output_len, -1)
+        tgt = torch.zeros_like(lm_logits)
+        final_logits = tgt.scatter(dim=-1, index=idx, src=src)
+        final_logits = torch.where(final_logits.eq(0), torch.ones_like(final_logits) * -1e10, final_logits)
+        final_probs = softmax(final_logits)
 
-    # map to the word vocab
-    idx = topk_concept2words_map.unsqueeze(1).expand(-1, output_len, -1, -1).view(batch_size, output_len, -1).type(
-        torch.int64)
-    src = concept_word_probs.view(batch_size, output_len, -1)
-    tgt = torch.zeros_like(lm_logits)
-    final_probs = tgt.scatter(dim=-1, index=idx, src=src)
+    else:
+        concept_word_logits3 = torch.where(concept_word_logits2.eq(0), torch.ones_like(concept_word_logits2) * -1e10,
+                                           concept_word_logits2)
+        word_probs_given_concept = softmax(concept_word_logits3)
+        # word_probs_given_concept[:, :, 0:2] = 0
+
+        concept_word_probs = word_probs_given_concept * (topk_concept_probs.unsqueeze(-1).unsqueeze(1))
+
+        # map to the word vocab
+        idx = topk_concept2words_map.unsqueeze(1).expand(-1, output_len, -1, -1).view(batch_size, output_len, -1).type(
+            torch.int64)
+        src = concept_word_probs.view(batch_size, output_len, -1)
+        tgt = torch.zeros_like(lm_logits)
+        final_probs = tgt.scatter(dim=-1, index=idx, src=src)
 
     return final_probs
 
