@@ -104,19 +104,19 @@ def visualize_samples(data_for_visualization, dict, valid_inds, observations):
         vis_hybrid_word_probs = visualize_topk_nodes_with_values(hybrid_word_probs, dict, k=5, concept=False,
                                                                  matrix=True)
         print('=' * 150)
-        print('TEXT: ', observations[valid_inds[i]]['text'])
-        print('FROM: {}'.format(vis_from_context_probs))
-        print('TOPE: {}'.format(vis_to_persona_probs))
-        print('CONC: {}'.format(vis_concept_probs))
-        print('PRED: {}'.format(vis_prediction))
+        print('【TEXT】{}'.format(observations[valid_inds[i]]['text']))
+        print('【FROM】{}'.format(vis_from_context_probs))
+        print('【TOPE】{}'.format(vis_to_persona_probs))
+        print('【CONC】{}'.format(vis_concept_probs))
+        print('【PRED】{}'.format(vis_prediction))
         gate_str = ' '.join(['{:>7}'.format(w) + '(' + str('{:.4f}'.format(g)) + ')' for w, g in
                              zip(line_outputs, gate)])
-        print('GATE: {}'.format(gate_str))
-        print('LM & HYBR:')
+        print('【GATE】{}'.format(gate_str))
+        print('------------------ 【LM Word Probs】 -----------------------')
         print('{}'.format(vis_lm_word_probs))
-        print('-' * 150)
+        print('------------------ 【Concept Word Probs】 ------------------')
         print('{}'.format(vis_concept_word_probs))
-        print('-' * 150)
+        print('------------------ 【Hybrid Word Probs】 -------------------')
         print('{}'.format(vis_hybrid_word_probs))
 
     return
@@ -136,7 +136,7 @@ def visualize_topk_nodes_with_values(tensor, vocab, k=10, concept=False, matrix=
         values = tensor.topk(5)[0].transpose(0, 1).tolist()
         for i, v in zip(idx, values):
             words = vocab.vec2words(i)
-            line = ' '.join(['{:>9}'.format(word) + '(' + str('{:.6f}'.format(prob)) + ')'
+            line = ' '.join(['{:>8}'.format(word) + '(' + str('{:.3f}'.format(prob)) + ')'
                              for word, prob in zip(words, v)])
             visualization += (line + '\n')
     return visualization
@@ -156,7 +156,7 @@ def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax, topk=50):
 
 
 def cal_final_reward(fcg_score, agent_a_coherent_reward, agent_a_language_reward):
-    reward_a_list = fcg_score + agent_a_coherent_reward + agent_a_language_reward
+    reward_a_list = fcg_score + 0.5 * agent_a_coherent_reward + agent_a_language_reward
     reward_a_baseline = reward_a_list.mean(axis=0, keepdims=True)
     reward_a_list = reward_a_list - reward_a_baseline
     return reward_a_list
