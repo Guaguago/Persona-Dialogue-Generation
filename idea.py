@@ -81,12 +81,12 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
     return kw_logits, kw_hidden_states
 
 
-def visualize_samples(data_for_visualization, dict, valid_inds, observations):
+def visualize_samples(data_for_visualization, dict, valid_inds, observations, hybrid_weights):
     i = random.randint(0, len(data_for_visualization) - 1)
     prediction = data_for_visualization[i]['prediction']
     from_context_probs = data_for_visualization[i]['from_context_probs']
     to_persona_probs = data_for_visualization[i]['to_persona_probs']
-    concept_probs = (from_context_probs + to_persona_probs) / 2
+    concept_probs = (to_persona_probs * hybrid_weights['jump'] + from_context_probs * hybrid_weights['walk'])
     concept_word_probs = data_for_visualization[i]['concept_word_probs']
     hybrid_word_probs = data_for_visualization[i]['hybrid_word_probs']
     lm_word_probs = data_for_visualization[i]['lm_word_probs']

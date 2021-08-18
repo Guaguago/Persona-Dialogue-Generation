@@ -996,7 +996,7 @@ class TransformerAgent(Agent):
                 answers=self.answers, ys=tgt_seq.data if tgt_seq is not None else None)
 
         if len(data_for_visualization[0]) > 0:
-            visualize_samples(data_for_visualization, self.dict, valid_inds, observations)
+            visualize_samples(data_for_visualization, self.dict, valid_inds, observations, self.opt['hybrid_weights'])
 
         if cand_preds is not None:
             if valid_cands is None:
