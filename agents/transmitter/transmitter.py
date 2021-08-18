@@ -730,7 +730,7 @@ class TransformerAgent(Agent):
         gate_label = for_gate['gate_label']
         gate_mask = for_gate['gate_mask']
 
-        if random.random() > 0.8:
+        if random.random() > 0.95:
             visualization = True
 
         if is_training:
