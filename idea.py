@@ -142,19 +142,6 @@ def visualize_topk_nodes_with_values(tensor, vocab, k=10, concept=False, matrix=
     return visualization
 
 
-def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax, topk=50):
-    # neighbors = kw_mask_matrix[context_kws].sum(dim=1).clamp(min=0, max=1)  # (keyword_vocab_size)
-    # kw_logits: (vocab, )
-    # num_neighbors = neighbors.sum(1).long()
-    # has_neighbors = num_neighbors.clamp(0, 1).unsqueeze(1).expand(-1, kw_logits.size(-1))
-    # neighbor_filter = kw_logits * ((1 - has_neighbors) + neighbors)
-    # logits = walk_logits(neighbor_filter, 10)
-
-    logits = top_k_logits(kw_logits, topk)
-    probs = softmax(logits / 3.0)
-    return probs
-
-
 def cal_final_reward(fcg_score, agent_a_coherent_reward, agent_a_language_reward):
     reward_a_list = fcg_score + 0.5 * agent_a_coherent_reward + agent_a_language_reward
     reward_a_baseline = reward_a_list.mean(axis=0, keepdims=True)
@@ -238,6 +225,19 @@ def have_concepts_in(common_ground_one_turn):
     return common_ground_one_turn.sum() > 1
 
 
+def cal_walk_probs(kw_logits, kw_mask_matrix, context_kws, softmax, topk=50):
+    # neighbors = kw_mask_matrix[context_kws].sum(dim=1).clamp(min=0, max=1)  # (keyword_vocab_size)
+    # kw_logits: (vocab, )
+    # num_neighbors = neighbors.sum(1).long()
+    # has_neighbors = num_neighbors.clamp(0, 1).unsqueeze(1).expand(-1, kw_logits.size(-1))
+    # neighbor_filter = kw_logits * ((1 - has_neighbors) + neighbors)
+    # logits = walk_logits(neighbor_filter, 10)
+
+    logits = top_k_logits(kw_logits, topk)
+    probs = softmax(logits / 3.0)
+    return probs
+
+
 def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     num_persona_kw = persona_kws.sum(-1)
     has_persona_kws = num_persona_kw.clamp(0, 1).unsqueeze(1).expand(-1, len(keyword2id))
@@ -262,11 +262,10 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     return probs
 
 
-def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, topk, concept2words_map, lm_logits, softmax,
-                           use_lm_logits=True):
+def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words_map, lm_logits, softmax,
+                           use_lm_logits=True, topk=10):
     assert len(lm_logits.size()) == 3
     assert len(walk_probs.size()) == 2
-
     batch_size = lm_logits.size(0)
     output_len = lm_logits.size(1)
     concept_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])

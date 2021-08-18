@@ -109,7 +109,7 @@ class Gpt2SeqModel(nn.Module):
             shift_logits = lm_logits[..., src_seq_len:-1, :].contiguous()
 
             lm_word_probs = self.softmax(shift_logits)
-            concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, 100,
+            concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights,
                                                         concept2words_map, shift_logits, self.softmax)
             gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
 
@@ -218,7 +218,7 @@ class Gpt2SeqModel(nn.Module):
                         gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
                         lm_word_probs = self.softmax(cand_logits)
                         concept_word_probs = cal_concept_word_probs(walk_probs[ind].unsqueeze(0),
-                                                                    jump_probs[ind].unsqueeze(0), hybrid_weights, 100,
+                                                                    jump_probs[ind].unsqueeze(0), hybrid_weights,
                                                                     concept2words_map, cand_logits, self.softmax)
                         gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
 
@@ -551,7 +551,7 @@ class Gpt2SeqModel(nn.Module):
                 logits = outputs[:, -1, :]
 
                 lm_word_probs = self.softmax(logits / temperature)
-                concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, 100,
+                concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights,
                                                             concept2words_map, logits.unsqueeze(1), self.softmax)
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :])).unsqueeze(1)
                 hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(1), concept_word_probs, gate,
@@ -681,7 +681,7 @@ class Gpt2SeqModel(nn.Module):
                     best_jump_probs = jump_probs[step, bests[step], :].unsqueeze(0)
                     lm_word_probs = self.softmax(best_logits / temperature)
                     concept_word_probs = cal_concept_word_probs(best_walk_probs, best_jump_probs, hybrid_weights,
-                                                                100, concept2words_map, best_logits.unsqueeze(0),
+                                                                concept2words_map, best_logits.unsqueeze(0),
                                                                 self.softmax)
                     gate = self.sigmoid(self.gate_linear(best_hidden_states).unsqueeze(0))
                     hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(0), concept_word_probs, gate,
