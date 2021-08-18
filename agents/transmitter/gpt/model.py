@@ -675,9 +675,8 @@ class Gpt2SeqModel(nn.Module):
                 predicts.append(best_seq.tolist())
 
                 if visualization:
-                    best_logits = logits[step, bests[step], src_seq_len - 1: src_seq_len + best_len - 3, :]
-                    best_hidden_states = hidden_states[step, bests[step], src_seq_len - 1: src_seq_len + best_len - 3,
-                                         :]
+                    best_logits = logits[step, bests[step], src_seq_len: src_seq_len + best_len - 2, :]
+                    best_hidden_states = hidden_states[step, bests[step], src_seq_len: src_seq_len + best_len - 2, :]
                     best_walk_probs = walk_probs[step, bests[step], :].unsqueeze(0)
                     best_jump_probs = jump_probs[step, bests[step], :].unsqueeze(0)
                     lm_word_probs = self.softmax(best_logits / temperature)
