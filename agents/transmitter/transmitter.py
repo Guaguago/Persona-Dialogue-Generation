@@ -730,9 +730,6 @@ class TransformerAgent(Agent):
         gate_label = for_gate['gate_label']
         gate_mask = for_gate['gate_mask']
 
-        if random.random() > 0.95:
-            visualization = True
-
         if is_training:
             self.model.train()
             self.zero_grad()
@@ -801,6 +798,8 @@ class TransformerAgent(Agent):
                     raise e
             self.update_params()
         else:
+            if random.random() > 0.9:
+                visualization = True
             self.model.eval()
             out = self.model.forward(src_seq=src_seq,
                                      src_seq_turn=src_seq_turn,
