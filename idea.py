@@ -262,27 +262,39 @@ def cal_jump_probs(kw_graph_distance_matrix, persona_kws, softmax, topk=50):
     return probs
 
 
-def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words_map, lm_logits, softmax):
+def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, topk, concept2words_map, lm_logits, softmax):
     assert len(lm_logits.size()) == 3
     assert len(walk_probs.size()) == 2
 
     batch_size = lm_logits.size(0)
     output_len = lm_logits.size(1)
     concept_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
-    concept2words_mask = concept2words_map.ne(0)
-    concept_word_logits = torch.gather(lm_logits.unsqueeze(-2).expand(batch_size, output_len, 2680, -1), dim=-1,
-                                       index=concept2words_map.type(torch.int64).unsqueeze(0).unsqueeze(0).expand(
-                                           batch_size, output_len, -1, -1))
-    concept_word_logits2 = concept_word_logits * concept2words_mask
-    concept_word_logits3 = torch.where(concept_word_logits2.eq(0), torch.ones_like(concept_word_logits2) * -1e5,
+
+    topk_concept_idx = concept_probs.topk(topk)[1]
+    topk_concept_probs = concept_probs.topk(topk)[0]
+
+    #  [bs, topk, 7]
+    topk_concept2words_map = torch.gather(input=concept2words_map.unsqueeze(0).expand(batch_size, -1, -1), dim=1,
+                                          index=topk_concept_idx.unsqueeze(-1).expand(-1, -1, 7))
+
+    # topk_concept_probs = torch.gather(input=concept_probs, dim=1, index=topk_concept_idx)
+    topk_concept2words_mask = topk_concept2words_map.ne(0)
+
+    #  [bs, len, topk, 7]
+    concept_word_logits = torch.gather(lm_logits.unsqueeze(-2).expand(batch_size, output_len, topk, -1), dim=-1,
+                                       index=topk_concept2words_map.type(torch.int64).unsqueeze(1).expand(
+                                           batch_size, output_len, topk, -1))
+    concept_word_logits2 = concept_word_logits * topk_concept2words_mask.unsqueeze(1).expand(-1, output_len, -1, -1)
+    concept_word_logits3 = torch.where(concept_word_logits2.eq(0), torch.ones_like(concept_word_logits2) * -1e10,
                                        concept_word_logits2)
     word_probs_given_concept = softmax(concept_word_logits3)
     # word_probs_given_concept[:, :, 0:2] = 0
 
-    concept_word_probs = word_probs_given_concept * (concept_probs.unsqueeze(-1).unsqueeze(1))
+    concept_word_probs = word_probs_given_concept * (topk_concept_probs.unsqueeze(-1).unsqueeze(1))
 
     # map to the word vocab
-    idx = concept2words_map.view(-1).unsqueeze(0).unsqueeze(0).expand(batch_size, output_len, -1).type(torch.int64)
+    idx = topk_concept2words_map.unsqueeze(1).expand(-1, output_len, -1, -1).view(batch_size, output_len, -1).type(
+        torch.int64)
     src = concept_word_probs.view(batch_size, output_len, -1)
     tgt = torch.zeros_like(lm_logits)
     final_probs = tgt.scatter(dim=-1, index=idx, src=src)
