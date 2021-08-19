@@ -217,8 +217,8 @@ class Gpt2SeqModel(nn.Module):
                         cand_logits = cand_logits[..., src_seq_len:-1, :].contiguous()
                         gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
                         lm_word_probs = self.softmax(cand_logits)
-                        concept_word_probs = cal_concept_word_probs(walk_probs[ind].unsqueeze(0),
-                                                                    jump_probs[ind].unsqueeze(0), hybrid_weights,
+                        concept_word_probs = cal_concept_word_probs(walk_probs[ind].unsqueeze(0).expand(20, -1),
+                                                                    jump_probs[ind].unsqueeze(0).expand(20, -1), hybrid_weights,
                                                                     concept2words_map, cand_logits, self.softmax)
                         gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
 
@@ -255,7 +255,7 @@ class Gpt2SeqModel(nn.Module):
 
     def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, hybrid_weights, jump_probs,
                         concept2words_map, visualization=False):
-        data_for_visualization = {}
+        data_for_visualization = [{} for i in range(batch_size)]
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
         is_end = torch.zeros(batch_size, dtype=torch.bool, device=device)
@@ -323,26 +323,26 @@ class Gpt2SeqModel(nn.Module):
                 if (~is_end).sum() == 0:
                     break
 
-        if visualization:
-            shift_logits = logits[..., src_seq_len:, :].contiguous()
-            lm_probs = self.softmax(shift_logits / 3.0)
-            gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:, :]))
-            # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
-            # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
-            # kw_probs = self.softmax(
-            #     kw_probs.gather(-1, word2concept_map.unsqueeze(0).expand(lm_probs.size())) / 0.01)
-
-            hybrid_probs, final_concept_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights,
-                                                                 word2concept_map, concept2words_map,
-                                                                 shift_logits, gate,
-                                                                 self.softmax, lm_mask=None)
-            data_for_visualization['from_context_prob'] = walk_probs
-            data_for_visualization['to_persona_prob'] = jump_probs
-            data_for_visualization['hybrid_probs'] = hybrid_probs
-            data_for_visualization['prediction'] = pred_output
-            data_for_visualization['gate'] = gate
-            data_for_visualization['lm_probs'] = lm_probs
-            data_for_visualization['final_concept_probs'] = final_concept_probs
+        # if visualization:
+        # shift_logits = logits[..., src_seq_len:, :].contiguous()
+        # lm_probs = self.softmax(shift_logits / 3.0)
+        # gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:, :]))
+        # # jump_gate = self.sigmoid(self.walk_or_jump_gate_linear(hidden_states[:, -1, :]))
+        # # kw_probs = jump_gate * jump_probs + (1 - jump_gate) * walk_probs
+        # # kw_probs = self.softmax(
+        # #     kw_probs.gather(-1, word2concept_map.unsqueeze(0).expand(lm_probs.size())) / 0.01)
+        #
+        # hybrid_probs, final_concept_probs = cal_hybrid_probs(walk_probs, jump_probs, hybrid_weights,
+        #                                                      word2concept_map, concept2words_map,
+        #                                                      shift_logits, gate,
+        #                                                      self.softmax, lm_mask=None)
+        # data_for_visualization['from_context_prob'] = walk_probs
+        # data_for_visualization['to_persona_prob'] = jump_probs
+        # data_for_visualization['hybrid_probs'] = hybrid_probs
+        # data_for_visualization['prediction'] = pred_output
+        # data_for_visualization['gate'] = gate
+        # data_for_visualization['lm_probs'] = lm_probs
+        # data_for_visualization['final_concept_probs'] = final_concept_probs
 
         return pred_output, hidden_states, data_for_visualization
 
