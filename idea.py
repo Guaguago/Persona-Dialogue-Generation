@@ -314,7 +314,7 @@ def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words
     return final_probs
 
 
-def cal_hybrid_word_probs(word_probs, concept_word_probs, gate, lm_mask, ablation=False):
+def cal_hybrid_word_probs(word_probs, concept_word_probs, gate, lm_mask, ablation=False, mean=False):
     # jump or walk [10, 2680]
     assert len(gate.size()) == 3
     assert len(word_probs.size()) == 3
@@ -322,6 +322,8 @@ def cal_hybrid_word_probs(word_probs, concept_word_probs, gate, lm_mask, ablatio
     # for gate only optimize examples with concepts in the response
     if ablation:
         hybrid_probs = word_probs * (1 - torch.zeros_like(gate)) + torch.zeros_like(gate) * concept_word_probs
+    elif mean:
+        hybrid_probs = (word_probs + concept_word_probs) / 2
     elif lm_mask is not None:
         hybrid_probs = word_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(1) * concept_word_probs
     else:
