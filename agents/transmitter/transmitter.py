@@ -798,7 +798,7 @@ class TransformerAgent(Agent):
                     raise e
             self.update_params()
         else:
-            if random.random() > 0.9:
+            if random.random() > 0.95:
                 visualization = True
             self.model.eval()
             out = self.model.forward(src_seq=src_seq,
