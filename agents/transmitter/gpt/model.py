@@ -177,7 +177,8 @@ class Gpt2SeqModel(nn.Module):
                                                                                           prior_dis, walk_probs,
                                                                                           hybrid_weights, jump_probs,
                                                                                           concept2words_map,
-                                                                                          visualization)
+                                                                                          visualization,
+                                                                                          concept_pool=concept_pool)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
             positive_score = self.linear(hidden_states[:, -1, :])
@@ -257,7 +258,7 @@ class Gpt2SeqModel(nn.Module):
         return sequence_lengths
 
     def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, hybrid_weights, jump_probs,
-                        concept2words_map, visualization=False):
+                        concept2words_map, visualization=False, concept_pool=None):
         data_for_visualization = [{} for i in range(batch_size)]
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
@@ -278,7 +279,8 @@ class Gpt2SeqModel(nn.Module):
 
                 lm_word_probs = self.softmax(last_logits)
                 concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights,
-                                                            concept2words_map, last_logits.unsqueeze(1), self.softmax)
+                                                            concept2words_map, last_logits.unsqueeze(1), self.softmax,
+                                                            concept_pool=concept_pool)
                 hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(1), concept_word_probs,
                                                           gate.unsqueeze(1), lm_mask=None)
                 hybrid_probs = hybrid_word_probs.squeeze(1).clamp(min=1e-6)
