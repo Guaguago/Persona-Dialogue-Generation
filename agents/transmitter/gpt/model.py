@@ -221,8 +221,8 @@ class Gpt2SeqModel(nn.Module):
                         lm_word_probs = self.softmax(cand_logits)
                         concept_word_probs = cal_concept_word_probs(walk_probs[ind].unsqueeze(0).expand(20, -1),
                                                                     jump_probs[ind].unsqueeze(0).expand(20, -1),
-                                                                    hybrid_weights,
-                                                                    concept2words_map, cand_logits, self.softmax)
+                                                                    hybrid_weights, concept2words_map, cand_logits,
+                                                                    self.softmax, concept_pool=concept_pool)
                         gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
 
                         hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask=None)
