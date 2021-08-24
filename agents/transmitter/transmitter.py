@@ -30,7 +30,7 @@ from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
 from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, cal_word2concept_map, \
-    visualize_samples, cal_concept2word_map, cal_concept_pool
+    visualize_samples, cal_concept2word_map, cal_concept_pool, cal_to_persona_pool, cal_context_pool, id2keyword
 from idea import get_keyword_mask_matrix, get_kw_graph_distance_matrix
 from idea import cal_kw_logits, cal_from_context_probs, cal_persona_pool
 from idea import prepare_example_persona_kws, prepare_batch_persona_kw_mask
@@ -725,10 +725,23 @@ class TransformerAgent(Agent):
         walk_probs = cal_from_context_probs(kw_logits, self.kw_mask_matrix,
                                             context_concepts, self.model.softmax)
 
-        concept_pool = cal_concept_pool(concept_logits=kw_logits, distance_matrix=self.kw_graph_distance_matrix,
-                                        context_concepts=context_concepts, persona_concept_mask=persona_kw_mask,
-                                        max_pool_size=50, softmax=self.model.softmax)
-        persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax)
+        context_pool = cal_context_pool(context_concepts=context_concepts, device=self.device)
+        # concept_pool = cal_concept_pool(concept_logits=kw_logits, distance_matrix=self.kw_graph_distance_matrix,
+        #                                 context_concepts=context_concepts, persona_concept_mask=persona_kw_mask,
+        #                                 max_pool_size=50, softmax=self.model.softmax)
+
+        # if concept_pool = 0 then this pool = 1
+        to_persona_pool = cal_to_persona_pool(distance_matrix=self.kw_graph_distance_matrix,
+                                              context_pool=context_pool,
+                                              persona_concept_mask=persona_kw_mask,
+                                              softmax=self.model.softmax)
+
+        persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
+                                                    max_pool_size=50)
+
+        final_pool = (context_pool + persona_pool).clamp(0, 1) * to_persona_pool
+        print([id2keyword[i] for i in torch.where(final_pool[0].eq(1))[0].tolist()])
+
         hybrid_weights = self.opt['hybrid_weights']
 
         for_gate = idea_interface['for_gate_module']
@@ -759,7 +772,7 @@ class TransformerAgent(Agent):
                                          concept2words_map=self.concept2words_map,
                                          hybrid_weights=hybrid_weights,
                                          visualization=visualization,
-                                         concept_pool=concept_pool,
+                                         final_pool=final_pool,
                                          persona_pool=persona_pool)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate, data_for_visualization = out[0], out[1], out[2], out[4], out[5]
@@ -821,7 +834,7 @@ class TransformerAgent(Agent):
                                      word2concept_map=self.word2concept_map,
                                      concept2words_map=self.concept2words_map,
                                      visualization=visualization,
-                                     concept_pool=concept_pool,
+                                     final_pool=final_pool,
                                      persona_pool=persona_pool)
             predictions, cand_preds = out[0], out[2]  # 生成example过程
             data_for_visualization = out[5]
@@ -840,7 +853,7 @@ class TransformerAgent(Agent):
                                          hybrid_weights=hybrid_weights,
                                          word2concept_map=self.word2concept_map,
                                          concept2words_map=self.concept2words_map,
-                                         concept_pool=concept_pool,
+                                         final_pool=final_pool,
                                          persona_pool=persona_pool)
 
                 hybrid_probs = out[1]

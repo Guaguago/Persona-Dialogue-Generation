@@ -67,7 +67,7 @@ class Gpt2SeqModel(nn.Module):
     def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
                 valid_cands=None, prev_enc=None, rank_during_training=False, sampling=False, sampling_cands=None,
                 walk_probs=None, jump_probs=None, word2concept_map=None, concept2words_map=None, lm_mask=None,
-                hybrid_weights=None, visualization=False, concept_pool=None, persona_pool=None):
+                hybrid_weights=None, visualization=False, final_pool=None, persona_pool=None):
         # concat src_seq and tgt_seq as one sentence, use start token to separate them.
         if tgt_seq is not None:
             # keep track of longest label we've ever seen
@@ -111,7 +111,7 @@ class Gpt2SeqModel(nn.Module):
             lm_word_probs = self.softmax(shift_logits)
             concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights,
                                                         concept2words_map, shift_logits, self.softmax,
-                                                        concept_pool=concept_pool, persona_pool=persona_pool)
+                                                        final_pool=final_pool, persona_pool=persona_pool)
             gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
 
             hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask)
@@ -168,7 +168,7 @@ class Gpt2SeqModel(nn.Module):
                                                                                       walk_probs, jump_probs,
                                                                                       hybrid_weights, concept2words_map,
                                                                                       1.0, visualization,
-                                                                                      concept_pool=concept_pool,
+                                                                                      final_pool=final_pool,
                                                                                       persona_pool=persona_pool)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
@@ -179,7 +179,7 @@ class Gpt2SeqModel(nn.Module):
                                                                                           hybrid_weights, jump_probs,
                                                                                           concept2words_map,
                                                                                           visualization,
-                                                                                          concept_pool=concept_pool)
+                                                                                          final_pool=final_pool)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
             positive_score = self.linear(hidden_states[:, -1, :])
@@ -224,7 +224,7 @@ class Gpt2SeqModel(nn.Module):
                         concept_word_probs = cal_concept_word_probs(walk_probs[ind].unsqueeze(0).expand(20, -1),
                                                                     jump_probs[ind].unsqueeze(0).expand(20, -1),
                                                                     hybrid_weights, concept2words_map, cand_logits,
-                                                                    self.softmax, concept_pool=concept_pool)
+                                                                    self.softmax, final_pool=final_pool)
                         gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
 
                         hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask=None)
@@ -259,7 +259,7 @@ class Gpt2SeqModel(nn.Module):
         return sequence_lengths
 
     def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, hybrid_weights, jump_probs,
-                        concept2words_map, visualization=False, concept_pool=None):
+                        concept2words_map, visualization=False, final_pool=None):
         data_for_visualization = [{} for i in range(batch_size)]
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
@@ -281,7 +281,7 @@ class Gpt2SeqModel(nn.Module):
                 lm_word_probs = self.softmax(last_logits)
                 concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights,
                                                             concept2words_map, last_logits.unsqueeze(1), self.softmax,
-                                                            concept_pool=concept_pool)
+                                                            final_pool=final_pool)
                 hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(1), concept_word_probs,
                                                           gate.unsqueeze(1), lm_mask=None)
                 hybrid_probs = hybrid_word_probs.squeeze(1).clamp(min=1e-6)
@@ -527,7 +527,7 @@ class Gpt2SeqModel(nn.Module):
         return pred_output, hybrid_word_probs, hidden_states
 
     def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights,
-                    concept2words_map, temperature, visualization=False, concept_pool=None, persona_pool=None):
+                    concept2words_map, temperature, visualization=False, final_pool=None, persona_pool=None):
         """
         beam search for the validating generation. Note we also impose the n-gram repeating, which is borrowed
         from https://github.com/pytorch/fairseq. The diversity is not useful here.
@@ -550,6 +550,7 @@ class Gpt2SeqModel(nn.Module):
             start_token_tensor = prior_context.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             jump_probs = jump_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             walk_probs = walk_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+            final_pool = final_pool.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
 
             token_tensor = start_token_tensor
             for step in range(self.longest_label):
@@ -559,7 +560,7 @@ class Gpt2SeqModel(nn.Module):
                 lm_word_probs = self.softmax(logits / temperature)
                 concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights,
                                                             concept2words_map, logits.unsqueeze(1), self.softmax,
-                                                            concept_pool=concept_pool, persona_pool=persona_pool)
+                                                            final_pool=final_pool, persona_pool=persona_pool)
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :])).unsqueeze(1)
                 hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(1), concept_word_probs, gate,
                                                           lm_mask=None)
@@ -674,6 +675,7 @@ class Gpt2SeqModel(nn.Module):
                 hidden_states = hidden_states.view(batch_size, self.beam_size, -1, 768)
                 walk_probs = walk_probs.view(batch_size, self.beam_size, 2680)
                 jump_probs = jump_probs.view(batch_size, self.beam_size, 2680)
+                final_pool = final_pool.view(batch_size, self.beam_size, 2680)
 
             for step in range(batch_size):
                 best_len = beam_lens[step, bests[step]]
@@ -686,10 +688,11 @@ class Gpt2SeqModel(nn.Module):
                     best_hidden_states = hidden_states[step, bests[step], src_seq_len: src_seq_len + best_len - 2, :]
                     best_walk_probs = walk_probs[step, bests[step], :].unsqueeze(0)
                     best_jump_probs = jump_probs[step, bests[step], :].unsqueeze(0)
+                    best_final_pool = final_pool[step, bests[step], :].unsqueeze(0)
                     lm_word_probs = self.softmax(best_logits / temperature)
                     concept_word_probs = cal_concept_word_probs(best_walk_probs, best_jump_probs, hybrid_weights,
                                                                 concept2words_map, best_logits.unsqueeze(0),
-                                                                self.softmax, concept_pool=concept_pool,
+                                                                self.softmax, final_pool=best_final_pool,
                                                                 persona_pool=persona_pool)
                     gate = self.sigmoid(self.gate_linear(best_hidden_states).unsqueeze(0))
                     hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(0), concept_word_probs, gate,

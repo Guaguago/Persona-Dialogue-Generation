@@ -268,7 +268,43 @@ def cal_concept_pool(concept_logits, distance_matrix, context_concepts, persona_
     return concept_pool, concept_probs
 
 
-def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, topk=100):
+def cal_context_pool(context_concepts, device):
+    batch_size = context_concepts.size(0)
+    context_concept_pool = torch.scatter(input=torch.zeros([batch_size, 2680], dtype=torch.bool, device=device),
+                                         src=torch.ones_like(context_concepts, dtype=torch.bool),
+                                         index=context_concepts, dim=-1)  # [bs, 2680]
+    context_concept_pool[:, 0:2] = 0
+    return context_concept_pool
+
+
+def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, softmax):
+    batch_size = context_pool.size(0)
+    matrix = distance_matrix['matrix']
+    max = distance_matrix['max']
+
+    has_context = context_pool.sum(dim=-1).clamp(0, 1).unsqueeze(-1)  # [bs, 1]
+
+    masked_matrix = context_pool.unsqueeze(-1) * \
+                    matrix.unsqueeze(0).expand(batch_size, -1, -1) * \
+                    persona_concept_mask.unsqueeze(1)  # [bs, 2680, 2680]
+
+    d_c2p = torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * max,
+                        masked_matrix).view(batch_size, -1).min(dim=-1)[0]
+    # d_c2p = masked_matrix.view(batch_size, -1).max(dim=-1)[0]
+
+    masked_matrix = matrix * persona_concept_mask.unsqueeze(1)
+    d_n2p = torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * max, masked_matrix).min(dim=-1)[0]
+    # d_n2p = masked_matrix.max(dim=-1)[0]
+
+    to_persona_pool = (d_n2p - d_c2p.unsqueeze(-1)) <= 0
+
+    # if concept_pool = 0 then this pool = 1, else not changed
+    to_persona_pool = to_persona_pool * has_context + (1 - has_context)
+    return to_persona_pool
+
+
+def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, max_pool_size=100):
+    has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
     matrix = kw_graph_distance_matrix['matrix']
     max = kw_graph_distance_matrix['max']
     num_persona_kw = persona_kws.sum(-1)
@@ -280,16 +316,18 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, topk=100):
     to_persona_matrix = torch.where(to_persona_matrix.eq(0), torch.ones_like(to_persona_matrix) * max,
                                     to_persona_matrix)
     logits = - to_persona_matrix.min(dim=-1)[0]
-    logits = top_k_logits(logits, topk)
+    logits = top_k_logits(logits, max_pool_size)
     probs = softmax(logits / 0.25)
 
     # print([id2keyword[i] for i in probs[0].topk(topk)[1].tolist()])
     persona_pool = probs > 1e-5
+
+    persona_pool = persona_pool * has_persona
     return persona_pool, probs
 
 
 def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words_map, lm_logits, softmax,
-                           use_lm_logits=True, topk=50, concept_pool=None, persona_pool=None):
+                           use_lm_logits=True, topk=50, final_pool=None, persona_pool=None, temperature=1.0):
     assert len(lm_logits.size()) == 3
     assert len(walk_probs.size()) == 2
     batch_size = lm_logits.size(0)
@@ -297,9 +335,11 @@ def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words
     # concept_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
 
     concept_word_probs = None
-    if persona_pool is not None:
-        # [bs, 2680, 7]
-        topk_concept2words_map = (persona_pool.unsqueeze(-1) * concept2words_map).view(batch_size, -1)
+    if final_pool is not None:
+        # [bs, 2680]
+        topk_concept2words_map = (final_pool.unsqueeze(-1) * concept2words_map).view(batch_size, -1)
+        assert topk_concept2words_map.size() == (batch_size, 2680 * 7)
+
         # map to the word vocab
         idx = topk_concept2words_map.unsqueeze(1).expand(-1, output_len, -1).type(torch.int64)
         concept_word_logits_mask = torch.scatter(input=torch.zeros_like(lm_logits, dtype=torch.int64), index=idx,
@@ -309,7 +349,7 @@ def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words
 
         concept_word_logits = torch.where(concept_word_logits.eq(0), torch.ones_like(concept_word_logits) * -1e10,
                                           concept_word_logits)
-        concept_word_probs = softmax(concept_word_logits)
+        concept_word_probs = softmax(concept_word_logits / temperature)
 
     # topk_concept_idx = concept_probs.topk(topk)[1]
     # topk_concept_probs = concept_probs.topk(topk)[0]
