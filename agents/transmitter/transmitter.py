@@ -741,8 +741,11 @@ class TransformerAgent(Agent):
         persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
                                                     max_pool_size=50)
         # print('【persona_pool】{}'.format([id2keyword[i] for i in torch.where(persona_pool[0].eq(1))[0].tolist()]))
-
-        final_pool = (context_pool + (persona_pool * to_persona_pool)).clamp(0, 1)
+        drop_literal = True
+        if drop_literal:
+            final_pool = ((context_pool + (persona_pool * to_persona_pool)).clamp(0, 1) - persona_kw_mask).clamp(0, 1)
+        else:
+            final_pool = (context_pool + (persona_pool * to_persona_pool)).clamp(0, 1)
         # print('【final_pool】{}'.format([id2keyword[i] for i in torch.where(final_pool[0].eq(1))[0].tolist()]))
 
         hybrid_weights = self.opt['hybrid_weights']
