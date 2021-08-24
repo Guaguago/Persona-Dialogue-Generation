@@ -726,6 +726,7 @@ class TransformerAgent(Agent):
                                             context_concepts, self.model.softmax)
 
         context_pool = cal_context_pool(context_concepts=context_concepts, device=self.device)
+        print('【context_pool】{}'.format([id2keyword[i] for i in torch.where(context_pool[0].eq(1))[0].tolist()]))
         # concept_pool = cal_concept_pool(concept_logits=kw_logits, distance_matrix=self.kw_graph_distance_matrix,
         #                                 context_concepts=context_concepts, persona_concept_mask=persona_kw_mask,
         #                                 max_pool_size=50, softmax=self.model.softmax)
@@ -735,12 +736,14 @@ class TransformerAgent(Agent):
                                               context_pool=context_pool,
                                               persona_concept_mask=persona_kw_mask,
                                               softmax=self.model.softmax)
+        print('【to_persona_pool】{}'.format([id2keyword[i] for i in torch.where(to_persona_pool[0].eq(1))[0].tolist()]))
 
         persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
                                                     max_pool_size=50)
+        print('【persona_pool】{}'.format([id2keyword[i] for i in torch.where(persona_pool[0].eq(1))[0].tolist()]))
 
         final_pool = (context_pool + persona_pool).clamp(0, 1) * to_persona_pool
-        print([id2keyword[i] for i in torch.where(final_pool[0].eq(1))[0].tolist()])
+        print('【final_pool】{}'.format([id2keyword[i] for i in torch.where(final_pool[0].eq(1))[0].tolist()]))
 
         hybrid_weights = self.opt['hybrid_weights']
 
