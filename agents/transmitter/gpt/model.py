@@ -700,6 +700,8 @@ class Gpt2SeqModel(nn.Module):
 
                     data_for_visualization[step]['from_context_probs'] = best_walk_probs.squeeze()
                     data_for_visualization[step]['to_persona_probs'] = best_jump_probs.squeeze()
+                    data_for_visualization[step]['final_pool'] = best_final_pool.squeeze()
+
                     data_for_visualization[step]['hybrid_word_probs'] = hybrid_word_probs.squeeze()
                     data_for_visualization[step]['prediction'] = best_seq
                     data_for_visualization[step]['gate'] = gate.squeeze()

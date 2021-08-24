@@ -84,6 +84,7 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
 def visualize_samples(data_for_visualization, dict, valid_inds, observations, hybrid_weights):
     i = random.randint(0, len(data_for_visualization) - 1)
     prediction = data_for_visualization[i]['prediction']
+    final_pool = data_for_visualization[i]['final_pool']
     from_context_probs = data_for_visualization[i]['from_context_probs']
     to_persona_probs = data_for_visualization[i]['to_persona_probs']
     concept_probs = (to_persona_probs * hybrid_weights['jump'] + from_context_probs * hybrid_weights['walk'])
@@ -105,9 +106,10 @@ def visualize_samples(data_for_visualization, dict, valid_inds, observations, hy
                                                              matrix=True)
     print('=' * 150)
     print('【TEXT】{}'.format(observations[valid_inds[i]]['text']))
-    print('【FROM】{}'.format(vis_from_context_probs))
-    print('【TOPE】{}'.format(vis_to_persona_probs))
-    print('【CONC】{}'.format(vis_concept_probs))
+    # print('【FROM】{}'.format(vis_from_context_probs))
+    # print('【TOPE】{}'.format(vis_to_persona_probs))
+    # print('【CONC】{}'.format(vis_concept_probs))
+    print('【POOL】{}'.format([id2keyword[i] for i in torch.where(final_pool.eq(1))[0].tolist()]))
     print('【PRED】{}'.format(vis_prediction))
     gate_str = ' '.join(['{:>7}'.format(w) + '(' + str('{:.4f}'.format(g)) + ')' for w, g in
                          zip(line_outputs, gate)])
@@ -315,12 +317,15 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, max_pool_si
     # mask 后产生 0， 需要将其替换为 max
     to_persona_matrix = torch.where(to_persona_matrix.eq(0), torch.ones_like(to_persona_matrix) * max,
                                     to_persona_matrix)
+
+    persona_pool = to_persona_matrix.min(dim=-1)[0] < 0.8
+
     logits = - to_persona_matrix.min(dim=-1)[0]
     logits = top_k_logits(logits, max_pool_size)
     probs = softmax(logits / 0.25)
 
     # print([id2keyword[i] for i in probs[0].topk(topk)[1].tolist()])
-    persona_pool = probs > 1e-5
+    # persona_pool = probs > 1e-5
 
     persona_pool = persona_pool * has_persona
     return persona_pool, probs
