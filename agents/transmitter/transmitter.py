@@ -825,7 +825,9 @@ class TransformerAgent(Agent):
                     raise e
             self.update_params()
         else:
-            if random.random() > 0.95:
+            if self.opt.get('eval_c_recall'):
+                visualization = True
+            elif random.random() > 0.95:
                 visualization = True
             self.model.eval()
             out = self.model.forward(src_seq=src_seq,
@@ -1021,8 +1023,6 @@ class TransformerAgent(Agent):
         else:
             report_freq = self.report_freq
 
-
-
         if predictions is not None:
             PaddingUtils.map_predictions(
                 predictions, valid_inds, batch_reply, observations,
@@ -1030,7 +1030,8 @@ class TransformerAgent(Agent):
                 answers=self.answers, ys=tgt_seq.data if tgt_seq is not None else None,
                 vis=data_for_visualization)
 
-        if self.opt['display_examples'] and data_for_visualization is not None and len(data_for_visualization[0]) > 0:
+        if self.opt.get('eval_c_recall') is None and data_for_visualization is not None and len(
+                data_for_visualization[0]) > 0:
             visualize_samples(data_for_visualization, self.dict, valid_inds, observations, self.opt['hybrid_weights'])
 
         if cand_preds is not None:
