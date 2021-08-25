@@ -66,11 +66,11 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
                                                x_utter=batch_context,
                                                x_concept=batch_context_concepts)  # (batch_size, keyword_vocab_size)
 
-        if keyword_mask_matrix is not None:
-            batch_vocab_mask = keyword_mask_matrix[batch_context_keywords].sum(dim=1).clamp(min=0,
-                                                                                            max=1)  # (batch_size, keyword_vocab_size)
-            kw_logits = (1 - batch_vocab_mask) * (
-                -5e4) + batch_vocab_mask * kw_logits  # (batch, vocab_size), masked logits
+        # if keyword_mask_matrix is not None:
+        #     batch_vocab_mask = keyword_mask_matrix[batch_context_keywords].sum(dim=1).clamp(min=0,
+        #                                                                                     max=1)  # (batch_size, keyword_vocab_size)
+        #     kw_logits = (1 - batch_vocab_mask) * (
+        #         -5e4) + batch_vocab_mask * kw_logits  # (batch, vocab_size), masked logits
 
     # if 0 != kw_logits.max() - kw_logits.min:
     #     print()
@@ -318,14 +318,14 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, max_pool_si
     to_persona_matrix = torch.where(to_persona_matrix.eq(0), torch.ones_like(to_persona_matrix) * max,
                                     to_persona_matrix)
 
-    persona_pool = to_persona_matrix.min(dim=-1)[0] < 0.8
+    # persona_pool = to_persona_matrix.min(dim=-1)[0] < 0.5
 
     logits = - to_persona_matrix.min(dim=-1)[0]
     logits = top_k_logits(logits, max_pool_size)
     probs = softmax(logits / 0.25)
 
     # print([id2keyword[i] for i in probs[0].topk(topk)[1].tolist()])
-    # persona_pool = probs > 1e-5
+    persona_pool = probs > 1e-5
 
     persona_pool = persona_pool * has_persona
     return persona_pool, probs
