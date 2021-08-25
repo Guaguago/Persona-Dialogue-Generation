@@ -7,7 +7,7 @@
 Uses locking and shared memory when ``numthreads`` is set to >1 to share metrics
 between processes.
 """
-
+from idea import kw_tokenize, keyword2id
 from parlai.core.thread_utils import SharedTable
 from parlai.core.utils import round_sigfigs, no_lock
 from collections import Counter
@@ -89,7 +89,6 @@ def normalize_answer_content_words(s):
             return word
         return _lemmatizer.lemmatize(word, pos)
 
-
     return white_space_fix(to_basic_form(pos_tag(remove_common_words(remove_articles(remove_punc(lower(s)))))))
 
 
@@ -132,6 +131,12 @@ def _f1_score(guess, answers):
         _prec_recall_f1_score(g_tokens, normalize_answer(a).split()) for a in answers
     ]
     return max(f1 for p, r, f1 in scores)
+
+
+def _concept_overlap(concepts, answers):
+    concepts_in_answers = [w for w in kw_tokenize(answers) if w in keyword2id]
+    precision, recall, f1 = _prec_recall_f1_score(concepts, concepts_in_answers)
+    return recall
 
 
 def _f1_score_content_words_only(guess, answers):
@@ -201,7 +206,7 @@ class Metrics(object):
     def __init__(self, opt):
         self.metrics = {}
         self.metrics['cnt'] = 0
-        self.metrics_list = ['mean_rank', 'loss', 'correct', 'f1', 'ppl']
+        self.metrics_list = ['mean_rank', 'loss', 'correct', 'f1', 'ppl', 'c_recall']
         if nltkbleu is not None:
             # only compute bleu if we can
             self.metrics_list.append('bleu')
@@ -266,6 +271,7 @@ class Metrics(object):
         # Exact match metric.
         correct = 0
         prediction = observation.get('text', None)
+        concepts = observation.get('concepts', None)
         if prediction is not None:
             if _exact_match(prediction, labels):
                 correct = 1
@@ -278,9 +284,14 @@ class Metrics(object):
             f1 = _f1_score(prediction, labels)
             # f1 = _f1_score_content_words_only(prediction, labels)
             bleu = _bleu(prediction, labels)
+
+            c_recall = _concept_overlap(concepts, labels[0])
+
             with self._lock():
                 self.metrics['f1'] += f1
                 self.metrics['f1_cnt'] += 1
+                self.metrics['c_recall'] += c_recall
+                self.metrics['c_recall_cnt'] += 1
                 if bleu is not None:
                     self.metrics['bleu'] += bleu
                     self.metrics['bleu_cnt'] += 1

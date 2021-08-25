@@ -1,7 +1,6 @@
 from nltk.util import ngrams
 import nltk
 import random
-from agents.common.gpt_dictionary import recover_bpe_encoding
 
 nltk.data.path.append('/apdcephfs/share_916081/chencxu/pegg/data/nltk_data')
 from nltk.stem import WordNetLemmatizer
@@ -109,7 +108,7 @@ def visualize_samples(data_for_visualization, dict, valid_inds, observations, hy
     # print('【FROM】{}'.format(vis_from_context_probs))
     # print('【TOPE】{}'.format(vis_to_persona_probs))
     # print('【CONC】{}'.format(vis_concept_probs))
-    print('【POOL】{}'.format([id2keyword[i] for i in torch.where(final_pool.eq(1))[0].tolist()]))
+    print('【POOL】{}'.format(final_pool))
     print('【PRED】{}'.format(vis_prediction))
     gate_str = ' '.join(['{:>7}'.format(w) + '(' + str('{:.4f}'.format(g)) + ')' for w, g in
                          zip(line_outputs, gate)])
