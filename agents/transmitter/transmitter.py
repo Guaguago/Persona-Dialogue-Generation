@@ -32,7 +32,7 @@ from agents.common.gpt_dictionary import GPTDictionaryAgent
 from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, cal_word2concept_map, \
     visualize_samples, cal_concept2word_map, cal_concept_pool, cal_to_persona_pool, cal_context_pool, id2keyword
 from idea import get_keyword_mask_matrix, get_kw_graph_distance_matrix
-from idea import cal_kw_logits, cal_from_context_probs, cal_persona_pool
+from idea import cal_kw_logits, cal_next_pool, cal_persona_pool
 from idea import prepare_example_persona_kws, prepare_batch_persona_kw_mask
 
 # lstm, transformer, gpt2
@@ -722,8 +722,8 @@ class TransformerAgent(Agent):
         kw_logits, kw_hidden_states = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.model.kw_model)
 
         context_concepts = for_kw_model['batch_context_keywords']
-        walk_probs = cal_from_context_probs(kw_logits, self.kw_mask_matrix,
-                                            context_concepts, self.model.softmax)
+        next_pool, next_probs = cal_next_pool(kw_logits, self.kw_mask_matrix,
+                                   context_concepts, self.model.softmax)
 
         context_pool = cal_context_pool(context_concepts=context_concepts, device=self.device)
         # print('【context_pool】{}'.format([id2keyword[i] for i in torch.where(context_pool[0].eq(1))[0].tolist()]))
@@ -736,17 +736,16 @@ class TransformerAgent(Agent):
                                               context_pool=context_pool,
                                               persona_concept_mask=persona_kw_mask,
                                               softmax=self.model.softmax)
-        # print('【to_persona_pool】{}'.format([id2keyword[i] for i in torch.where(to_persona_pool[0].eq(1))[0].tolist()]))
 
         persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
                                                     max_pool_size=50)
-        # print('【persona_pool】{}'.format([id2keyword[i] for i in torch.where(persona_pool[0].eq(1))[0].tolist()]))
-        drop_literal = True
-        if drop_literal:
-            final_pool = ((context_pool + (persona_pool * to_persona_pool)).clamp(0, 1) - persona_kw_mask).clamp(0, 1)
-        else:
-            final_pool = (context_pool + (persona_pool * to_persona_pool)).clamp(0, 1)
-        # print('【final_pool】{}'.format([id2keyword[i] for i in torch.where(final_pool[0].eq(1))[0].tolist()]))
+
+        final_pool = next_pool
+        # drop_literal = True
+        # if drop_literal:
+        #     final_pool = ((context_pool + (persona_pool * to_persona_pool)).clamp(0, 1) - persona_kw_mask).clamp(0, 1)
+        # else:
+        #     final_pool = (context_pool + (persona_pool * to_persona_pool)).clamp(0, 1)
 
         hybrid_weights = self.opt['hybrid_weights']
 
@@ -773,7 +772,7 @@ class TransformerAgent(Agent):
                                          valid_cands=valid_cands,
                                          lm_mask=lm_mask,
                                          jump_probs=jump_probs,
-                                         walk_probs=walk_probs,
+                                         walk_probs=next_probs,
                                          word2concept_map=self.word2concept_map,
                                          concept2words_map=self.concept2words_map,
                                          hybrid_weights=hybrid_weights,
@@ -827,7 +826,7 @@ class TransformerAgent(Agent):
         else:
             if self.opt.get('eval_c_recall'):
                 visualization = True
-            elif random.random() > 0.95:
+            elif random.random() > 0.1:
                 visualization = True
             self.model.eval()
             out = self.model.forward(src_seq=src_seq,
@@ -837,7 +836,7 @@ class TransformerAgent(Agent):
                                      cands=cands,
                                      valid_cands=valid_cands,
                                      jump_probs=jump_probs,
-                                     walk_probs=walk_probs,
+                                     walk_probs=next_probs,
                                      hybrid_weights=hybrid_weights,
                                      word2concept_map=self.word2concept_map,
                                      concept2words_map=self.concept2words_map,
@@ -857,7 +856,7 @@ class TransformerAgent(Agent):
                                          cands=cands,
                                          valid_cands=valid_cands,
                                          jump_probs=jump_probs,
-                                         walk_probs=walk_probs,
+                                         walk_probs=next_probs,
                                          hybrid_weights=hybrid_weights,
                                          word2concept_map=self.word2concept_map,
                                          concept2words_map=self.concept2words_map,

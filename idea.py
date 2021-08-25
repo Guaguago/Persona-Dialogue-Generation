@@ -226,7 +226,7 @@ def have_concepts_in(common_ground_one_turn):
     return common_ground_one_turn.sum() > 1
 
 
-def cal_from_context_probs(logits, kw_mask_matrix, context_kws, softmax, topk=None):
+def cal_next_pool(logits, kw_mask_matrix, context_kws, softmax, topk=5):
     # neighbors = kw_mask_matrix[context_kws].sum(dim=1).clamp(min=0, max=1)  # (keyword_vocab_size)
     # kw_logits: (vocab, )
     # num_neighbors = neighbors.sum(1).long()
@@ -236,7 +236,8 @@ def cal_from_context_probs(logits, kw_mask_matrix, context_kws, softmax, topk=No
     if topk is not None:
         logits = top_k_logits(logits, topk)
     probs = softmax(logits / 1.0)
-    return probs
+    pool = probs > 1e-5
+    return pool, probs
 
 
 def cal_concept_pool(concept_logits, distance_matrix, context_concepts, persona_concept_mask, max_pool_size, softmax):
