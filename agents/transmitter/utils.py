@@ -594,7 +594,7 @@ class PaddingUtils(object):
     @classmethod
     def map_predictions(cls, predictions, valid_inds, batch_reply,
                         observations, dictionary, end_idx, report_freq=0.1,
-                        labels=None, answers=None, ys=None):
+                        labels=None, answers=None, ys=None, vis=None):
         """Predictions are mapped back to appropriate indices in the batch_reply
            using valid_inds.
            report_freq -- how often we report predictions
@@ -603,6 +603,11 @@ class PaddingUtils(object):
             # map the predictions back to non-empty examples in the batch
             # we join with spaces since we produce tokens one at a timelab
             curr = batch_reply[valid_inds[i]]
+
+            if vis is not None:
+                concept = vis[valid_inds[i]]['final_pool']
+                curr['concepts'] = concept
+
             output_tokens = []
             j = 0
             for c in predictions[i]:

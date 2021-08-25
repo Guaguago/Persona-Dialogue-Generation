@@ -1020,13 +1020,17 @@ class TransformerAgent(Agent):
             report_freq = 0
         else:
             report_freq = self.report_freq
+
+
+
         if predictions is not None:
             PaddingUtils.map_predictions(
                 predictions, valid_inds, batch_reply, observations,
                 self.dict, self.END_IDX, report_freq=report_freq, labels=labels,
-                answers=self.answers, ys=tgt_seq.data if tgt_seq is not None else None)
+                answers=self.answers, ys=tgt_seq.data if tgt_seq is not None else None,
+                vis=data_for_visualization)
 
-        if data_for_visualization is not None and len(data_for_visualization[0]) > 0:
+        if self.opt['display_examples'] and data_for_visualization is not None and len(data_for_visualization[0]) > 0:
             visualize_samples(data_for_visualization, self.dict, valid_inds, observations, self.opt['hybrid_weights'])
 
         if cand_preds is not None:
