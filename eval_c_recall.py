@@ -1,6 +1,7 @@
 from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
 IS_ORIGINAL = True
+R = 1.2  # decide the size of persona pool
 
 
 def setup_task():
@@ -48,7 +49,8 @@ if __name__ == '__main__':
         batchsize=10,
         beam_size=2,
         display_examples=False,
-        eval_c_recall=True
+        eval_c_recall=True,
+        r=R
     )
     opt = parser.parse_args(print_args=False)
     eval_f1(opt, print_parser=parser)
