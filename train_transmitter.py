@@ -13,13 +13,14 @@ import torch
 from agents.transmitter.transmitter import ARCH_CHOICE
 from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 
-# if is original, train model on original data; otherwise on revised data.
-MODEL = 'psquare'
+# Parameters
+MODEL = 'transmitter'
 NAME = "pegg-o"
 IS_ORIGINAL = True
-GEN, GATE, CLS = 0.6, 0.2, 0.1
-HYBRID = {'walk': 0.2, 'jump': 0.8}
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/62128'
+GEN, GATE, CLS = 1., 1., 1.
+R = 1.2  # decide the size of the persona pool
+
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-17'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 
@@ -91,7 +92,8 @@ def setup_args():
         gate_weight=GATE,
         cls_weight=CLS,
         datapath=DATA_DIR,
-        hybrid_weights=HYBRID,
+        r=R,
+        # hybrid_weights=HYBRID,
         model_file='{}/{}/{}.model'.format(MODEL_DIR, MODEL, exp_name),
         dict_tokenizer='split',
         datatype='train',
