@@ -305,7 +305,7 @@ def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, sof
     return to_persona_pool
 
 
-def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, max_pool_size=100):
+def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None):
     has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
     matrix = kw_graph_distance_matrix['matrix']
     max = kw_graph_distance_matrix['max']
@@ -318,14 +318,14 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, max_pool_si
     to_persona_matrix = torch.where(to_persona_matrix.eq(0), torch.ones_like(to_persona_matrix) * max,
                                     to_persona_matrix)
 
-    # persona_pool = to_persona_matrix.min(dim=-1)[0] < 0.5
+    persona_pool = to_persona_matrix.min(dim=-1)[0] < r
 
     logits = - to_persona_matrix.min(dim=-1)[0]
-    logits = top_k_logits(logits, max_pool_size)
+    logits = top_k_logits(logits, 100)
     probs = softmax(logits / 0.25)
 
     # print([id2keyword[i] for i in probs[0].topk(topk)[1].tolist()])
-    persona_pool = probs > 1e-5
+    # persona_pool = probs > 1e-5
 
     persona_pool = persona_pool * has_persona
     return persona_pool, probs
