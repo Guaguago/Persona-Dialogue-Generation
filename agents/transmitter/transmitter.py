@@ -738,7 +738,7 @@ class TransformerAgent(Agent):
                                               softmax=self.model.softmax)
 
         persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
-                                                    max_pool_size=100)
+                                                    r=self.opt['r'])
 
         final_pool = persona_pool
         # drop_literal = True
