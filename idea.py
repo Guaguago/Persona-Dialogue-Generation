@@ -80,13 +80,13 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
     return kw_logits, kw_hidden_states
 
 
-def visualize_samples(data_for_visualization, dict, valid_inds, observations, hybrid_weights):
+def visualize_samples(data_for_visualization, dict, valid_inds, observations):
     i = random.randint(0, len(data_for_visualization) - 1)
     prediction = data_for_visualization[i]['prediction']
     final_pool = data_for_visualization[i]['final_pool']
     from_context_probs = data_for_visualization[i]['from_context_probs']
     to_persona_probs = data_for_visualization[i]['to_persona_probs']
-    concept_probs = (to_persona_probs * hybrid_weights['jump'] + from_context_probs * hybrid_weights['walk'])
+    # concept_probs = (to_persona_probs * hybrid_weights['jump'] + from_context_probs * hybrid_weights['walk'])
     concept_word_probs = data_for_visualization[i]['concept_word_probs']
     hybrid_word_probs = data_for_visualization[i]['hybrid_word_probs']
     lm_word_probs = data_for_visualization[i]['lm_word_probs']
@@ -97,7 +97,7 @@ def visualize_samples(data_for_visualization, dict, valid_inds, observations, hy
     vis_prediction = ' '.join(['{:>5}'.format(i) for i in line_outputs])
     vis_from_context_probs = visualize_topk_nodes_with_values(from_context_probs, id2keyword, k=8, concept=True)
     vis_to_persona_probs = visualize_topk_nodes_with_values(to_persona_probs, id2keyword, k=8, concept=True)
-    vis_concept_probs = visualize_topk_nodes_with_values(concept_probs, id2keyword, k=8, concept=True)
+    # vis_concept_probs = visualize_topk_nodes_with_values(concept_probs, id2keyword, k=8, concept=True)
     vis_lm_word_probs = visualize_topk_nodes_with_values(lm_word_probs, dict, k=5, concept=False, matrix=True)
     vis_concept_word_probs = visualize_topk_nodes_with_values(concept_word_probs, dict, k=5, concept=False,
                                                               matrix=True)

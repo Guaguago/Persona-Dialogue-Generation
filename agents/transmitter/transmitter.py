@@ -1031,7 +1031,7 @@ class TransformerAgent(Agent):
 
         if self.opt.get('eval_c_recall') is None and data_for_visualization is not None and len(
                 data_for_visualization) > 0:
-            visualize_samples(data_for_visualization, self.dict, valid_inds, observations, self.opt['hybrid_weights'])
+            visualize_samples(data_for_visualization, self.dict, valid_inds, observations)
 
         if cand_preds is not None:
             if valid_cands is None:
