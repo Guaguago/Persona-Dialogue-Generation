@@ -738,9 +738,9 @@ class TransformerAgent(Agent):
                                               softmax=self.model.softmax)
 
         persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
-                                                    max_pool_size=50)
+                                                    max_pool_size=100)
 
-        final_pool = next_pool
+        final_pool = persona_pool
         # drop_literal = True
         # if drop_literal:
         #     final_pool = ((context_pool + (persona_pool * to_persona_pool)).clamp(0, 1) - persona_kw_mask).clamp(0, 1)
@@ -826,7 +826,7 @@ class TransformerAgent(Agent):
         else:
             if self.opt.get('eval_c_recall'):
                 visualization = True
-            elif random.random() > 0.1:
+            elif random.random() > 0.97:
                 visualization = True
             self.model.eval()
             out = self.model.forward(src_seq=src_seq,
