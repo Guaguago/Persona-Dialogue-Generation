@@ -604,7 +604,7 @@ class PaddingUtils(object):
             # we join with spaces since we produce tokens one at a timelab
             curr = batch_reply[valid_inds[i]]
 
-            if vis is not None:
+            if vis is not None and len(vis[0]) > 0:
                 concept = vis[valid_inds[i]]['final_pool']
                 curr['concepts'] = concept
 

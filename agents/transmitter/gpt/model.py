@@ -123,15 +123,15 @@ class Gpt2SeqModel(nn.Module):
 
             predictions = hybrid_word_probs.argmax(dim=-1)
 
-            if visualization:
-                for step in range(batch_size):
-                    data_for_visualization[step]['from_context_probs'] = walk_probs[step].squeeze()
-                    data_for_visualization[step]['to_persona_probs'] = jump_probs[step].squeeze()
-                    data_for_visualization[step]['hybrid_word_probs'] = hybrid_word_probs[step].squeeze()
-                    data_for_visualization[step]['prediction'] = predictions[step].squeeze()
-                    data_for_visualization[step]['gate'] = gate[step].squeeze()
-                    data_for_visualization[step]['lm_word_probs'] = self.softmax(shift_logits)[step].squeeze()
-                    data_for_visualization[step]['concept_word_probs'] = concept_word_probs[step].squeeze()
+            # if visualization:
+            #     for step in range(batch_size):
+            #         data_for_visualization[step]['from_context_probs'] = walk_probs[step].squeeze()
+            #         data_for_visualization[step]['to_persona_probs'] = jump_probs[step].squeeze()
+            #         data_for_visualization[step]['hybrid_word_probs'] = hybrid_word_probs[step].squeeze()
+            #         data_for_visualization[step]['prediction'] = predictions[step].squeeze()
+            #         data_for_visualization[step]['gate'] = gate[step].squeeze()
+            #         data_for_visualization[step]['lm_word_probs'] = self.softmax(shift_logits)[step].squeeze()
+            #         data_for_visualization[step]['concept_word_probs'] = concept_word_probs[step].squeeze()
 
         else:
             prior_context = torch.cat([src_seq, start_tensor], dim=1)
