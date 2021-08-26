@@ -780,7 +780,7 @@ class TransformerAgent(Agent):
                                          final_pool=final_pool,
                                          persona_pool=persona_pool)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
-                _preds, hybrid_probs, cand_preds, gate, data_for_visualization = out[0], out[1], out[2], out[4], out[5]
+                _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 
                 positive_score, negative_score = out[-2], out[-1]
 
@@ -1029,8 +1029,7 @@ class TransformerAgent(Agent):
                 answers=self.answers, ys=tgt_seq.data if tgt_seq is not None else None,
                 vis=data_for_visualization)
 
-        if self.opt.get('eval_c_recall') is None and data_for_visualization is not None and len(
-                data_for_visualization) > 0:
+        if is_training is False and self.opt.get('eval_c_recall') is None and data_for_visualization is not None and len(data_for_visualization) > 0:
             visualize_samples(data_for_visualization, self.dict, valid_inds, observations)
 
         if cand_preds is not None:
