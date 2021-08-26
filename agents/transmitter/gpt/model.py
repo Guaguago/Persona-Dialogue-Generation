@@ -79,8 +79,7 @@ class Gpt2SeqModel(nn.Module):
         if src_seq_dis is not None:
             src_seq_dis = np.array(src_seq_dis)
 
-        # evaluation return none scores
-        data_for_visualization = [{} for i in range(batch_size)]
+        data_for_visualization = None
         hybrid_word_probs = None
         negative_score = None
         start_tensor = self.start_tensor.detach().expand(batch_size, 1)
@@ -123,15 +122,6 @@ class Gpt2SeqModel(nn.Module):
 
             predictions = hybrid_word_probs.argmax(dim=-1)
 
-            # if visualization:
-            #     for step in range(batch_size):
-            #         data_for_visualization[step]['from_context_probs'] = walk_probs[step].squeeze()
-            #         data_for_visualization[step]['to_persona_probs'] = jump_probs[step].squeeze()
-            #         data_for_visualization[step]['hybrid_word_probs'] = hybrid_word_probs[step].squeeze()
-            #         data_for_visualization[step]['prediction'] = predictions[step].squeeze()
-            #         data_for_visualization[step]['gate'] = gate[step].squeeze()
-            #         data_for_visualization[step]['lm_word_probs'] = self.softmax(shift_logits)[step].squeeze()
-            #         data_for_visualization[step]['concept_word_probs'] = concept_word_probs[step].squeeze()
 
         else:
             prior_context = torch.cat([src_seq, start_tensor], dim=1)
@@ -534,7 +524,10 @@ class Gpt2SeqModel(nn.Module):
         """
         device = next(self.parameters()).device
         src_seq_len = prior_context.size(-1)
-        data_for_visualization = [{} for i in range(batch_size)]
+        if visualization:
+            data_for_visualization = [{} for i in range(batch_size)]
+        else:
+            data_for_visualization = None
         beam_scores = torch.zeros(batch_size, self.beam_size, device=device)
         beam_lens = torch.ones(batch_size, self.beam_size, dtype=torch.long, device=device)
         is_end = torch.zeros(batch_size, self.beam_size, dtype=torch.bool, device=device)
