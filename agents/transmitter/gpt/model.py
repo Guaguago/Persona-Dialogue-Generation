@@ -705,9 +705,11 @@ class Gpt2SeqModel(nn.Module):
 
                     data_for_visualization[step]['from_context_probs'] = best_walk_probs.squeeze()
                     data_for_visualization[step]['to_persona_probs'] = best_jump_probs.squeeze()
-                    data_for_visualization[step]['final_pool'] = [id2keyword[i] for i in
-                                                                  torch.where(best_final_pool.squeeze().eq(1))[
-                                                                      0].tolist()]
+                    data_for_visualization[step]['size_of_final_pool'] = best_final_pool.squeeze().eq(1).sum()
+
+                    # data_for_visualization[step]['final_pool'] = [id2keyword[i] for i in
+                    #                                               torch.where(best_final_pool.squeeze().eq(1))[
+                    #                                                   0].tolist()]
                     data_for_visualization[step]['hybrid_word_probs'] = hybrid_word_probs.squeeze()
                     data_for_visualization[step]['prediction'] = best_seq
                     data_for_visualization[step]['gate'] = gate.squeeze()
