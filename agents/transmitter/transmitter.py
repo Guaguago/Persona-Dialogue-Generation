@@ -824,6 +824,7 @@ class TransformerAgent(Agent):
                     self.metrics['total_skipped_batches'] += 1
                     return predictions, cand_preds
                 else:
+                    print(e)
                     raise e
             self.update_params()
         else:
