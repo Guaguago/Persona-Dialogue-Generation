@@ -754,6 +754,8 @@ class TransformerAgent(Agent):
         gate_label = for_gate['gate_label']
         gate_mask = for_gate['gate_mask']
 
+        use_mask = self.opt.get('use_mask')
+
         if is_training:
             self.model.train()
             self.zero_grad()
@@ -778,7 +780,8 @@ class TransformerAgent(Agent):
                                          # hybrid_weights=hybrid_weights,
                                          visualization=visualization,
                                          final_pool=final_pool,
-                                         persona_pool=persona_pool)
+                                         persona_pool=persona_pool,
+                                         use_mask=use_mask)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 
@@ -826,7 +829,7 @@ class TransformerAgent(Agent):
         else:
             if self.opt.get('eval_c_recall'):
                 visualization = True
-            elif random.random() > 0.97:
+            elif random.random() > 0.1:
                 visualization = True
             self.model.eval()
             out = self.model.forward(src_seq=src_seq,
@@ -842,7 +845,8 @@ class TransformerAgent(Agent):
                                      concept2words_map=self.concept2words_map,
                                      visualization=visualization,
                                      final_pool=final_pool,
-                                     persona_pool=persona_pool)
+                                     persona_pool=persona_pool,
+                                     use_mask=use_mask)
             predictions, cand_preds = out[0], out[2]  # 生成example过程
             data_for_visualization = out[5]
 
@@ -861,7 +865,8 @@ class TransformerAgent(Agent):
                                          word2concept_map=self.word2concept_map,
                                          concept2words_map=self.concept2words_map,
                                          final_pool=final_pool,
-                                         persona_pool=persona_pool)
+                                         persona_pool=persona_pool,
+                                         use_mask=use_mask)
 
                 hybrid_probs = out[1]
 

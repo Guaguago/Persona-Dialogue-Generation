@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
 import os
-from idea import load_kw_model, cal_concept_word_probs, cal_hybrid_word_probs, id2keyword
+from idea import load_kw_model, cal_concept_word_probs, cal_hybrid_word_probs, id2keyword, cal_lm_word_probs
 
 
 class Gpt2SeqModel(nn.Module):
@@ -67,7 +67,7 @@ class Gpt2SeqModel(nn.Module):
     def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
                 valid_cands=None, prev_enc=None, rank_during_training=False, sampling=False, sampling_cands=None,
                 walk_probs=None, jump_probs=None, word2concept_map=None, concept2words_map=None, lm_mask=None,
-                hybrid_weights=None, visualization=False, final_pool=None, persona_pool=None):
+                hybrid_weights=None, visualization=False, final_pool=None, persona_pool=None, use_mask=None):
         # concat src_seq and tgt_seq as one sentence, use start token to separate them.
         if tgt_seq is not None:
             # keep track of longest label we've ever seen
@@ -107,10 +107,14 @@ class Gpt2SeqModel(nn.Module):
             # lm labels should mask the source sentence language model
             shift_logits = lm_logits[..., src_seq_len:-1, :].contiguous()
 
-            lm_word_probs = self.softmax(shift_logits)
-            concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights,
-                                                        concept2words_map, shift_logits, self.softmax,
-                                                        final_pool=final_pool, persona_pool=persona_pool)
+            concept_word_probs, concept_word_mask = cal_concept_word_probs(logits=shift_logits,
+                                                                           final_pool=final_pool,
+                                                                           concept2words_map=concept2words_map,
+                                                                           use_mask=use_mask,
+                                                                           softmax=self.softmax)
+
+            lm_word_probs = cal_lm_word_probs(logits=shift_logits, mask=concept_word_mask, softmax=self.softmax)
+
             gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
 
             hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask)
@@ -159,7 +163,7 @@ class Gpt2SeqModel(nn.Module):
                                                                                       hybrid_weights, concept2words_map,
                                                                                       1.0, visualization,
                                                                                       final_pool=final_pool,
-                                                                                      persona_pool=persona_pool)
+                                                                                      use_mask=use_mask)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
 
@@ -517,7 +521,8 @@ class Gpt2SeqModel(nn.Module):
         return pred_output, hybrid_word_probs, hidden_states
 
     def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights,
-                    concept2words_map, temperature, visualization=False, final_pool=None, persona_pool=None):
+                    concept2words_map, temperature, visualization=False, final_pool=None, persona_pool=None,
+                    use_mask=False):
         """
         beam search for the validating generation. Note we also impose the n-gram repeating, which is borrowed
         from https://github.com/pytorch/fairseq. The diversity is not useful here.
@@ -550,14 +555,21 @@ class Gpt2SeqModel(nn.Module):
                 outputs, hidden_states = self.transformer_module.forward(token_tensor)
                 logits = outputs[:, -1, :]
 
-                lm_word_probs = self.softmax(logits / temperature)
-                concept_word_probs = cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights,
-                                                            concept2words_map, logits.unsqueeze(1), self.softmax,
-                                                            final_pool=final_pool, persona_pool=persona_pool)
+                concept_word_probs, concept_word_mask = cal_concept_word_probs(logits=logits.unsqueeze(1),
+                                                                               final_pool=final_pool,
+                                                                               concept2words_map=concept2words_map,
+                                                                               use_mask=use_mask,
+                                                                               softmax=self.softmax)
+
+                lm_word_probs = cal_lm_word_probs(logits=logits.unsqueeze(1), mask=concept_word_mask,
+                                                  softmax=self.softmax)
+
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :])).unsqueeze(1)
-                hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(1), concept_word_probs, gate,
-                                                          lm_mask=None)
-                log_probs = torch.log(hybrid_word_probs.squeeze(1))
+                hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs=lm_word_probs,
+                                                          concept_word_probs=concept_word_probs,
+                                                          gate=gate, lm_mask=None).squeeze(1)
+
+                log_probs = torch.log(hybrid_word_probs)
 
                 if 0 < self.no_repeat_ngram_size < step:
                     # for each beam and batch sentence, generate a list of previous ngrams
@@ -682,14 +694,21 @@ class Gpt2SeqModel(nn.Module):
                     best_walk_probs = walk_probs[step, bests[step], :].unsqueeze(0)
                     best_jump_probs = jump_probs[step, bests[step], :].unsqueeze(0)
                     best_final_pool = final_pool[step, bests[step], :].unsqueeze(0)
-                    lm_word_probs = self.softmax(best_logits / temperature)
-                    concept_word_probs = cal_concept_word_probs(best_walk_probs, best_jump_probs, hybrid_weights,
-                                                                concept2words_map, best_logits.unsqueeze(0),
-                                                                self.softmax, final_pool=best_final_pool,
-                                                                persona_pool=persona_pool)
+
+                    concept_word_probs, concept_word_mask = cal_concept_word_probs(logits=best_logits.unsqueeze(0),
+                                                                                   concept2words_map=concept2words_map,
+                                                                                   final_pool=best_final_pool,
+                                                                                   softmax=self.softmax,
+                                                                                   use_mask=use_mask)
+
+                    lm_word_probs = cal_lm_word_probs(logits=best_logits.unsqueeze(0), mask=concept_word_mask,
+                                                      softmax=self.softmax)
+
                     gate = self.sigmoid(self.gate_linear(best_hidden_states).unsqueeze(0))
-                    hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs.unsqueeze(0), concept_word_probs, gate,
-                                                              lm_mask=None)
+
+                    hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs=lm_word_probs,
+                                                              concept_word_probs=concept_word_probs,
+                                                              gate=gate, lm_mask=None)
 
                     data_for_visualization[step]['from_context_probs'] = best_walk_probs.squeeze()
                     data_for_visualization[step]['to_persona_probs'] = best_jump_probs.squeeze()

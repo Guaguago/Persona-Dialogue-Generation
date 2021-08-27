@@ -331,15 +331,22 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None):
     return persona_pool, probs
 
 
-def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words_map, lm_logits, softmax,
-                           use_lm_logits=True, topk=50, final_pool=None, persona_pool=None, temperature=1.0):
-    assert len(lm_logits.size()) == 3
-    assert len(walk_probs.size()) == 2
-    batch_size = lm_logits.size(0)
-    output_len = lm_logits.size(1)
+def cal_lm_word_probs(logits, softmax, mask):
+    if mask is not None:
+        logits = logits * ~mask
+        logits = torch.where(logits.eq(0), torch.ones_like(logits) * -1e10, logits)
+    probs = softmax(logits)
+    return probs
+
+
+def cal_concept_word_probs(logits, final_pool, concept2words_map, softmax, temperature=1.0, use_mask=None):
+    assert len(logits.size()) == 3
+    assert len(final_pool.size()) == 2
+    batch_size = logits.size(0)
+    output_len = logits.size(1)
     # concept_probs = (jump_probs * hybrid_weights['jump'] + walk_probs * hybrid_weights['walk'])
 
-    concept_word_probs = None
+    concept_word_probs, concept_word_mask = None, None
     if final_pool is not None:
         # [bs, 2680]
         topk_concept2words_map = (final_pool.unsqueeze(-1) * concept2words_map).view(batch_size, -1)
@@ -347,14 +354,17 @@ def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words
 
         # map to the word vocab
         idx = topk_concept2words_map.unsqueeze(1).expand(-1, output_len, -1).type(torch.int64)
-        concept_word_logits_mask = torch.scatter(input=torch.zeros_like(lm_logits, dtype=torch.int64), index=idx,
+        concept_word_logits_mask = torch.scatter(input=torch.zeros_like(logits, dtype=torch.int64), index=idx,
                                                  src=torch.ones_like(idx), dim=-1)
         concept_word_logits_mask[:, :, 0] = 0
-        concept_word_logits = lm_logits * concept_word_logits_mask
+        concept_word_logits = logits * concept_word_logits_mask
 
         concept_word_logits = torch.where(concept_word_logits.eq(0), torch.ones_like(concept_word_logits) * -1e10,
                                           concept_word_logits)
         concept_word_probs = softmax(concept_word_logits / temperature)
+
+        if use_mask:
+            concept_word_mask = concept_word_probs > 1e-10
 
     # topk_concept_idx = concept_probs.topk(topk)[1]
     # topk_concept_probs = concept_probs.topk(topk)[0]
@@ -397,23 +407,22 @@ def cal_concept_word_probs(walk_probs, jump_probs, hybrid_weights, concept2words
     #     tgt = torch.zeros_like(lm_logits)
     #     final_probs = tgt.scatter(dim=-1, index=idx, src=src)
 
-    return concept_word_probs
+    return concept_word_probs, concept_word_mask
 
 
-def cal_hybrid_word_probs(word_probs, concept_word_probs, gate, lm_mask, ablation=False, mean=False):
+def cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask, ablation=False):
     # jump or walk [10, 2680]
     assert len(gate.size()) == 3
-    assert len(word_probs.size()) == 3
+    assert len(lm_word_probs.size()) == 3
 
     # for gate only optimize examples with concepts in the response
     if ablation:
-        hybrid_probs = word_probs * (1 - torch.zeros_like(gate)) + torch.zeros_like(gate) * concept_word_probs
-    elif mean:
-        hybrid_probs = (word_probs + concept_word_probs) / 2
+        hybrid_probs = lm_word_probs * (1 - torch.zeros_like(gate)) + torch.zeros_like(gate) * concept_word_probs
     elif lm_mask is not None:
-        hybrid_probs = word_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(1) * concept_word_probs
+        hybrid_probs = lm_word_probs * (1 - gate * lm_mask.unsqueeze(1)) + gate * lm_mask.unsqueeze(
+            1) * concept_word_probs
     else:
-        hybrid_probs = word_probs * (1 - gate) + gate * concept_word_probs
+        hybrid_probs = lm_word_probs * (1 - gate) + gate * concept_word_probs
     return hybrid_probs
 
 
