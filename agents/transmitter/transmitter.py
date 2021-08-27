@@ -754,8 +754,6 @@ class TransformerAgent(Agent):
         gate_label = for_gate['gate_label']
         gate_mask = for_gate['gate_mask']
 
-        use_mask = self.opt.get('use_mask')
-
         if is_training:
             self.model.train()
             self.zero_grad()
@@ -779,9 +777,7 @@ class TransformerAgent(Agent):
                                          concept2words_map=self.concept2words_map,
                                          # hybrid_weights=hybrid_weights,
                                          visualization=visualization,
-                                         final_pool=final_pool,
-                                         persona_pool=persona_pool,
-                                         use_mask=use_mask)
+                                         final_pool=final_pool)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 
@@ -845,9 +841,7 @@ class TransformerAgent(Agent):
                                      word2concept_map=self.word2concept_map,
                                      concept2words_map=self.concept2words_map,
                                      visualization=visualization,
-                                     final_pool=final_pool,
-                                     persona_pool=persona_pool,
-                                     use_mask=use_mask)
+                                     final_pool=final_pool)
             predictions, cand_preds = out[0], out[2]  # 生成example过程
             data_for_visualization = out[5]
 
@@ -865,9 +859,7 @@ class TransformerAgent(Agent):
                                          # hybrid_weights=hybrid_weights,
                                          word2concept_map=self.word2concept_map,
                                          concept2words_map=self.concept2words_map,
-                                         final_pool=final_pool,
-                                         persona_pool=persona_pool,
-                                         use_mask=use_mask)
+                                         final_pool=final_pool)
 
                 hybrid_probs = out[1]
 
@@ -1035,7 +1027,8 @@ class TransformerAgent(Agent):
                 answers=self.answers, ys=tgt_seq.data if tgt_seq is not None else None,
                 vis=data_for_visualization)
 
-        if is_training is False and self.opt.get('eval_c_recall') is None and data_for_visualization is not None and len(data_for_visualization) > 0:
+        if is_training is False and self.opt.get(
+                'eval_c_recall') is None and data_for_visualization is not None and len(data_for_visualization) > 0:
             visualize_samples(data_for_visualization, self.dict, valid_inds, observations)
 
         if cand_preds is not None:

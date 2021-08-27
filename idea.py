@@ -331,15 +331,12 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None):
     return persona_pool, probs
 
 
-def cal_lm_word_probs(logits, softmax, mask):
-    if mask is not None:
-        logits = logits * ~mask
-        logits = torch.where(logits.eq(0), torch.ones_like(logits) * -1e10, logits)
+def cal_lm_word_probs(logits, softmax):
     probs = softmax(logits)
     return probs
 
 
-def cal_concept_word_probs(logits, final_pool, concept2words_map, softmax, temperature=1.0, use_mask=None):
+def cal_concept_word_probs(logits, final_pool, concept2words_map, softmax, temperature=1.0):
     assert len(logits.size()) == 3
     assert len(final_pool.size()) == 2
     batch_size = logits.size(0)
@@ -362,9 +359,6 @@ def cal_concept_word_probs(logits, final_pool, concept2words_map, softmax, tempe
         concept_word_logits = torch.where(concept_word_logits.eq(0), torch.ones_like(concept_word_logits) * -1e10,
                                           concept_word_logits)
         concept_word_probs = softmax(concept_word_logits / temperature)
-
-        if use_mask:
-            concept_word_mask = concept_word_probs > 1e-10
 
     # topk_concept_idx = concept_probs.topk(topk)[1]
     # topk_concept_probs = concept_probs.topk(topk)[0]
@@ -407,7 +401,7 @@ def cal_concept_word_probs(logits, final_pool, concept2words_map, softmax, tempe
     #     tgt = torch.zeros_like(lm_logits)
     #     final_probs = tgt.scatter(dim=-1, index=idx, src=src)
 
-    return concept_word_probs, concept_word_mask
+    return concept_word_probs
 
 
 def cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask, ablation=False):

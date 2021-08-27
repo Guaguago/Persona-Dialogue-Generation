@@ -67,7 +67,7 @@ class Gpt2SeqModel(nn.Module):
     def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
                 valid_cands=None, prev_enc=None, rank_during_training=False, sampling=False, sampling_cands=None,
                 walk_probs=None, jump_probs=None, word2concept_map=None, concept2words_map=None, lm_mask=None,
-                hybrid_weights=None, visualization=False, final_pool=None, persona_pool=None, use_mask=None):
+                hybrid_weights=None, visualization=False, final_pool=None):
         # concat src_seq and tgt_seq as one sentence, use start token to separate them.
         if tgt_seq is not None:
             # keep track of longest label we've ever seen
@@ -107,13 +107,12 @@ class Gpt2SeqModel(nn.Module):
             # lm labels should mask the source sentence language model
             shift_logits = lm_logits[..., src_seq_len:-1, :].contiguous()
 
-            concept_word_probs, concept_word_mask = cal_concept_word_probs(logits=shift_logits,
-                                                                           final_pool=final_pool,
-                                                                           concept2words_map=concept2words_map,
-                                                                           use_mask=use_mask,
-                                                                           softmax=self.softmax)
+            concept_word_probs = cal_concept_word_probs(logits=shift_logits,
+                                                        final_pool=final_pool,
+                                                        concept2words_map=concept2words_map,
+                                                        softmax=self.softmax)
 
-            lm_word_probs = cal_lm_word_probs(logits=shift_logits, mask=concept_word_mask, softmax=self.softmax)
+            lm_word_probs = cal_lm_word_probs(logits=shift_logits, softmax=self.softmax)
 
             gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
 
@@ -162,8 +161,7 @@ class Gpt2SeqModel(nn.Module):
                                                                                       walk_probs, jump_probs,
                                                                                       hybrid_weights, concept2words_map,
                                                                                       1.0, visualization,
-                                                                                      final_pool=final_pool,
-                                                                                      use_mask=use_mask)
+                                                                                      final_pool=final_pool)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
 
@@ -521,8 +519,7 @@ class Gpt2SeqModel(nn.Module):
         return pred_output, hybrid_word_probs, hidden_states
 
     def beam_search(self, batch_size, prior_context, walk_probs, jump_probs, hybrid_weights,
-                    concept2words_map, temperature, visualization=False, final_pool=None, persona_pool=None,
-                    use_mask=False):
+                    concept2words_map, temperature, visualization=False, final_pool=None):
         """
         beam search for the validating generation. Note we also impose the n-gram repeating, which is borrowed
         from https://github.com/pytorch/fairseq. The diversity is not useful here.
@@ -555,14 +552,12 @@ class Gpt2SeqModel(nn.Module):
                 outputs, hidden_states = self.transformer_module.forward(token_tensor)
                 logits = outputs[:, -1, :]
 
-                concept_word_probs, concept_word_mask = cal_concept_word_probs(logits=logits.unsqueeze(1),
-                                                                               final_pool=final_pool,
-                                                                               concept2words_map=concept2words_map,
-                                                                               use_mask=use_mask,
-                                                                               softmax=self.softmax)
+                concept_word_probs = cal_concept_word_probs(logits=logits.unsqueeze(1),
+                                                            final_pool=final_pool,
+                                                            concept2words_map=concept2words_map,
+                                                            softmax=self.softmax)
 
-                lm_word_probs = cal_lm_word_probs(logits=logits.unsqueeze(1), mask=concept_word_mask,
-                                                  softmax=self.softmax)
+                lm_word_probs = cal_lm_word_probs(logits=logits.unsqueeze(1), softmax=self.softmax)
 
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :])).unsqueeze(1)
                 hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs=lm_word_probs,
@@ -695,14 +690,12 @@ class Gpt2SeqModel(nn.Module):
                     best_jump_probs = jump_probs[step, bests[step], :].unsqueeze(0)
                     best_final_pool = final_pool[step, bests[step], :].unsqueeze(0)
 
-                    concept_word_probs, concept_word_mask = cal_concept_word_probs(logits=best_logits.unsqueeze(0),
-                                                                                   concept2words_map=concept2words_map,
-                                                                                   final_pool=best_final_pool,
-                                                                                   softmax=self.softmax,
-                                                                                   use_mask=use_mask)
+                    concept_word_probs = cal_concept_word_probs(logits=best_logits.unsqueeze(0),
+                                                                concept2words_map=concept2words_map,
+                                                                final_pool=best_final_pool,
+                                                                softmax=self.softmax)
 
-                    lm_word_probs = cal_lm_word_probs(logits=best_logits.unsqueeze(0), mask=concept_word_mask,
-                                                      softmax=self.softmax)
+                    lm_word_probs = cal_lm_word_probs(logits=best_logits.unsqueeze(0), softmax=self.softmax)
 
                     gate = self.sigmoid(self.gate_linear(best_hidden_states).unsqueeze(0))
 
