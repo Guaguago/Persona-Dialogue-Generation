@@ -83,7 +83,7 @@ def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
 def visualize_samples(data_for_visualization, dict, valid_inds, observations):
     i = random.randint(0, len(data_for_visualization) - 1)
     prediction = data_for_visualization[i]['prediction']
-    size_of_final_pool = data_for_visualization[i]['size_of_final_pool']
+    final_pool = data_for_visualization[i]['final_pool']
     from_context_probs = data_for_visualization[i]['from_context_probs']
     to_persona_probs = data_for_visualization[i]['to_persona_probs']
     # concept_probs = (to_persona_probs * hybrid_weights['jump'] + from_context_probs * hybrid_weights['walk'])
@@ -108,7 +108,7 @@ def visualize_samples(data_for_visualization, dict, valid_inds, observations):
     # print('【FROM】{}'.format(vis_from_context_probs))
     # print('【TOPE】{}'.format(vis_to_persona_probs))
     # print('【CONC】{}'.format(vis_concept_probs))
-    print('【POOL】{}'.format(size_of_final_pool))
+    print('【POOL】{}'.format(len(final_pool)))
     print('【PRED】{}'.format(vis_prediction))
     gate_str = ' '.join(['{:>7}'.format(w) + '(' + str('{:.4f}'.format(g)) + ')' for w, g in
                          zip(line_outputs, gate)])

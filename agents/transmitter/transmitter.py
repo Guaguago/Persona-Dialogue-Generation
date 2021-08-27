@@ -837,7 +837,7 @@ class TransformerAgent(Agent):
         else:
             if self.opt.get('eval_c_recall'):
                 visualization = True
-            elif random.random() > 0.1:
+            elif random.random() > 0.97:
                 visualization = True
             self.model.eval()
             out = self.model.forward(src_seq=src_seq,
