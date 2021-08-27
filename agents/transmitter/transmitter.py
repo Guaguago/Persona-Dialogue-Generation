@@ -722,6 +722,11 @@ class TransformerAgent(Agent):
         kw_logits, kw_hidden_states = cal_kw_logits(for_kw_model, self.kw_mask_matrix, self.model.kw_model)
 
         context_concepts = for_kw_model['batch_context_keywords']
+
+        # get hyper-parameters
+        use_all_concept_pool = self.opt.get('use_all_concept_pool')
+        r = self.opt.get('r')
+
         next_pool, next_probs = cal_next_pool(kw_logits, self.kw_mask_matrix,
                                               context_concepts, self.model.softmax)
 
@@ -738,9 +743,15 @@ class TransformerAgent(Agent):
                                               softmax=self.model.softmax)
 
         persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
-                                                    r=self.opt['r'])
+                                                    r=r)
 
-        final_pool = persona_pool
+        all_concept_pool = torch.ones_like(context_pool)
+
+        if use_all_concept_pool:
+            final_pool = all_concept_pool
+        else:
+            final_pool = persona_pool
+
         # drop_literal = True
         # if drop_literal:
         #     final_pool = ((context_pool + (persona_pool * to_persona_pool)).clamp(0, 1) - persona_kw_mask).clamp(0, 1)
