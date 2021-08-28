@@ -4,7 +4,10 @@ IS_ORIGINAL = True
 MODEL_DIR = 'train-o-18'
 R = 1.0  # decide the size of persona pool
 USE_ALL_CONCEPT_POOL = False
+USE_TO_PERSONA_POOL = True
 USE_CONTEXT_POOL = True
+USE_PERSONA_LOWER_BOUND = True
+
 
 def setup_task():
     if IS_ORIGINAL:
@@ -55,6 +58,8 @@ if __name__ == '__main__':
         r=R,
         use_all_concept_pool=USE_ALL_CONCEPT_POOL,
         use_context_pool=USE_CONTEXT_POOL,
+        use_to_persona_pool=USE_TO_PERSONA_POOL,
+        use_persona_lower_bound=USE_PERSONA_LOWER_BOUND,
     )
     opt = parser.parse_args(print_args=False)
     eval_f1(opt, print_parser=parser)
