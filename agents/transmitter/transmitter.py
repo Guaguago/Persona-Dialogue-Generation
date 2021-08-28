@@ -725,6 +725,7 @@ class TransformerAgent(Agent):
 
         # get hyper-parameters
         use_all_concept_pool = self.opt.get('use_all_concept_pool')
+        use_context_pool = self.opt.get('use_context_pool')
         r = self.opt.get('r')
 
         next_pool, next_probs = cal_next_pool(kw_logits, self.kw_mask_matrix,
@@ -751,6 +752,9 @@ class TransformerAgent(Agent):
             final_pool = all_concept_pool
         else:
             final_pool = persona_pool
+
+        if use_context_pool:
+            final_pool = (final_pool + context_pool).clamp(0, 1)
 
         # drop_literal = True
         # if drop_literal:
