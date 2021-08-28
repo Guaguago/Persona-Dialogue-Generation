@@ -2,9 +2,11 @@ from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
 NAME = "pegg-o"
 IS_ORIGINAL = True
-HYBRID = {'walk': 0.5, 'jump': 0.5}
+R = 1.0  # decide the size of persona pool
+USE_ALL_CONCEPT_POOL = False
+USE_CONTEXT_POOL = True
 
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/11155'
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-18'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 
@@ -47,13 +49,15 @@ if __name__ == '__main__':
     model_name = setup_trained_weights()
     parser.set_params(
         datapath=DATA_DIR,
-        hybrid_weights=HYBRID,
         model_file='{}/transmitter/{}.model'.format(MODEL_DIR, NAME),
         model='agents.transmitter.transmitter:TransformerAgent',
         init_model_transmitter=model_name,
         gpu=0,
         batchsize=16,
-        beam_size=1,
+        beam_size=2,
+        r=R,
+        use_all_concept_pool=USE_ALL_CONCEPT_POOL,
+        use_context_pool=USE_CONTEXT_POOL,
         rank_candidates=True,
         report_freq=0.0001,
     )
