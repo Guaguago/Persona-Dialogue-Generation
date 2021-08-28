@@ -749,11 +749,14 @@ class TransformerAgent(Agent):
         all_concept_pool = torch.ones_like(context_pool)
 
         if use_all_concept_pool:
+            print('[ use all concept pool ]')
             final_pool = all_concept_pool
         else:
+            print('[ use persona pool ]')
             final_pool = persona_pool
 
         if use_context_pool:
+            print('[ add context pool ]')
             final_pool = (final_pool + context_pool).clamp(0, 1)
 
         # drop_literal = True
