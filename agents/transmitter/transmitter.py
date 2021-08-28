@@ -766,7 +766,7 @@ class TransformerAgent(Agent):
             context_pool = context_pool * ((final_pool.eq(0).sum(-1).clamp(0, 1)).unsqueeze(-1))
             final_pool = (final_pool + context_pool).clamp(0, 1)
 
-        if random.random() > 0.8:
+        if random.random() > 0.97:
             print('The size of the pool:{}'.format(len(final_pool[3])))
         # drop_literal = True
         # if drop_literal:
