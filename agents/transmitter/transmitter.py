@@ -751,21 +751,23 @@ class TransformerAgent(Agent):
         all_concept_pool = torch.ones_like(context_pool)
 
         if use_all_concept_pool:
-            print('[ use all concept pool ]')
+            # print('[ use all concept pool ]')
             final_pool = all_concept_pool
         else:
-            print('[ use persona pool ]')
+            # print('[ use persona pool ]')
             final_pool = persona_pool
 
         if use_to_persona_pool:
-            print('[ use_to_persona_pool ]')
+            # print('[ use_to_persona_pool ]')
             final_pool = persona_pool * to_persona_pool
 
         if use_context_pool:
-            print('[ add context pool ]')
+            # print('[ add context pool ]')
             context_pool = context_pool * ((final_pool.eq(0).sum(-1).clamp(0, 1)).unsqueeze(-1))
             final_pool = (final_pool + context_pool).clamp(0, 1)
 
+        if random.random() > 0.8:
+            print('The size of the pool:{}'.format(len(final_pool[3])))
         # drop_literal = True
         # if drop_literal:
         #     final_pool = ((context_pool + (persona_pool * to_persona_pool)).clamp(0, 1) - persona_kw_mask).clamp(0, 1)
@@ -802,7 +804,7 @@ class TransformerAgent(Agent):
                                          concept2words_map=self.concept2words_map,
                                          # hybrid_weights=hybrid_weights,
                                          visualization=visualization,
-                                         final_pool=final_pool)
+                                         final_pool=all_concept_pool)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 
