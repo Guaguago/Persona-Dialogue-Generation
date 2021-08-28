@@ -96,6 +96,7 @@ def setup_args():
         datapath=DATA_DIR,
         r=R,
         use_all_concept_pool=USE_ALL_CONCEPT_POOL,
+        use_context_pool=USE_CONTEXT_POOL,
         # hybrid_weights=HYBRID,
         model_file='{}/{}/{}.model'.format(MODEL_DIR, MODEL, exp_name),
         dict_tokenizer='split',

@@ -1,8 +1,10 @@
 from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
 IS_ORIGINAL = True
-R = 1.2  # decide the size of persona pool
-
+MODEL_DIR = 'train-o-18'
+R = 1.0  # decide the size of persona pool
+USE_ALL_CONCEPT_POOL = False
+USE_CONTEXT_POOL = True
 
 def setup_task():
     if IS_ORIGINAL:
@@ -14,9 +16,9 @@ def setup_task():
 
 def setup_trained_weights():
     if IS_ORIGINAL:
-        weights_name = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-15/transmitter/pegg-o.model'
+        weights_name = '/apdcephfs/share_916081/chencxu/pegg/AAAI/{}/transmitter/pegg-o.model'.format(MODEL_DIR)
     else:
-        weights_name = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-r-15/transmitter/pegg-r.model'
+        weights_name = '/apdcephfs/share_916081/chencxu/pegg/AAAI/{}/transmitter/pegg-r.model'.format(MODEL_DIR)
     return weights_name
 
 
@@ -50,7 +52,9 @@ if __name__ == '__main__':
         beam_size=2,
         display_examples=False,
         eval_c_recall=True,
-        r=R
+        r=R,
+        use_all_concept_pool=USE_ALL_CONCEPT_POOL,
+        use_context_pool=USE_CONTEXT_POOL,
     )
     opt = parser.parse_args(print_args=False)
     eval_f1(opt, print_parser=parser)
