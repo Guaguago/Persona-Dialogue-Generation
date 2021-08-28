@@ -279,33 +279,34 @@ def cal_context_pool(context_concepts, device):
     return context_concept_pool
 
 
-def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, softmax):
+def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, softmax, use_min=False):
     batch_size = context_pool.size(0)
     matrix = distance_matrix['matrix']
     max = distance_matrix['max']
 
-    has_context = context_pool.sum(dim=-1).clamp(0, 1).unsqueeze(-1)  # [bs, 1]
+    has_concept = (context_pool + persona_concept_mask).sum(dim=-1).clamp(0, 1).unsqueeze(-1)  # [bs, 1]
 
-    masked_matrix = context_pool.unsqueeze(-1) * \
-                    matrix.unsqueeze(0).expand(batch_size, -1, -1) * \
-                    persona_concept_mask.unsqueeze(1)  # [bs, 2680, 2680]
+    masked_matrix = context_pool.unsqueeze(-1) * matrix.unsqueeze(0).expand(batch_size, -1, -1) * persona_concept_mask.unsqueeze(1)  # [bs, 2680, 2680]
 
-    d_c2p = torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * max,
-                        masked_matrix).view(batch_size, -1).min(dim=-1)[0]
+    if use_min:
+        d_c2p = torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * max, masked_matrix).view(batch_size, -1).min(dim=-1)[0]
+    else:
+        d_c2p = masked_matrix.view(batch_size, -1).sum(dim=-1) / ((masked_matrix.view(batch_size, -1) > 0) + 0.).sum(-1).clamp(1e-5)
     # d_c2p = masked_matrix.view(batch_size, -1).max(dim=-1)[0]
 
     masked_matrix = matrix * persona_concept_mask.unsqueeze(1)
-    d_n2p = torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * max, masked_matrix).min(dim=-1)[0]
-    # d_n2p = masked_matrix.max(dim=-1)[0]
+    if use_min:
+        d_n2p = torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * max, masked_matrix).min(dim=-1)[0]
+    else:
+        d_n2p = masked_matrix.sum(-1) / (((persona_concept_mask) > 0)+0.).sum(-1).unsqueeze(-1).clamp(1e-5)
+    to_persona_pool = (d_n2p - d_c2p.unsqueeze(-1)) < 0
 
-    to_persona_pool = (d_n2p - d_c2p.unsqueeze(-1)) <= 0
-
-    # if concept_pool = 0 then this pool = 1, else not changed
-    to_persona_pool = to_persona_pool * has_context + (1 - has_context)
+    # No concepts then this pool = 1
+    to_persona_pool = to_persona_pool * has_concept + (1 - has_concept)
     return to_persona_pool
 
 
-def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None):
+def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, use_persona_lower_bound=False):
     has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
     matrix = kw_graph_distance_matrix['matrix']
     max = kw_graph_distance_matrix['max']
@@ -320,15 +321,15 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None):
 
     persona_pool = to_persona_matrix.min(dim=-1)[0] < r
 
-    logits = - to_persona_matrix.min(dim=-1)[0]
+    logits = max - to_persona_matrix.min(dim=-1)[0]
     logits = top_k_logits(logits, 100)
-    probs = softmax(logits / 0.25)
+    persona_probs = softmax(logits / 0.25)
 
     # print([id2keyword[i] for i in probs[0].topk(topk)[1].tolist()])
     # persona_pool = probs > 1e-5
 
     persona_pool = persona_pool * has_persona
-    return persona_pool, probs
+    return persona_pool, persona_probs
 
 
 def cal_lm_word_probs(logits, softmax):

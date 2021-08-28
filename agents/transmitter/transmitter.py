@@ -726,6 +726,8 @@ class TransformerAgent(Agent):
         # get hyper-parameters
         use_all_concept_pool = self.opt.get('use_all_concept_pool')
         use_context_pool = self.opt.get('use_context_pool')
+        use_to_persona_pool = self.opt.get('use_to_persona_pool')
+        use_persona_lower_bound = self.opt.get('use_persona_lower_bound')
         r = self.opt.get('r')
 
         next_pool, next_probs = cal_next_pool(kw_logits, self.kw_mask_matrix,
@@ -744,7 +746,7 @@ class TransformerAgent(Agent):
                                               softmax=self.model.softmax)
 
         persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
-                                                    r=r)
+                                                    r=r, use_persona_lower_bound=use_persona_lower_bound)
 
         all_concept_pool = torch.ones_like(context_pool)
 
@@ -755,8 +757,13 @@ class TransformerAgent(Agent):
             print('[ use persona pool ]')
             final_pool = persona_pool
 
+        if use_to_persona_pool:
+            print('[ use_to_persona_pool ]')
+            final_pool = persona_pool * to_persona_pool
+
         if use_context_pool:
             print('[ add context pool ]')
+            context_pool = context_pool * ((final_pool.eq(0).sum(-1).clamp(0, 1)).unsqueeze(-1))
             final_pool = (final_pool + context_pool).clamp(0, 1)
 
         # drop_literal = True

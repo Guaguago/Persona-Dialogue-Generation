@@ -20,7 +20,9 @@ IS_ORIGINAL = True
 GEN, GATE, CLS = 1., 1., 1.
 R = 1.2  # decide the size of the persona pool
 USE_ALL_CONCEPT_POOL = False
+USE_TO_PERSONA_POOL = True
 USE_CONTEXT_POOL = True
+USE_PERSONA_LOWER_BOUND = True
 
 MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-17'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
@@ -97,6 +99,8 @@ def setup_args():
         r=R,
         use_all_concept_pool=USE_ALL_CONCEPT_POOL,
         use_context_pool=USE_CONTEXT_POOL,
+        use_to_persona_pool=USE_TO_PERSONA_POOL,
+        use_persona_lower_bound=USE_PERSONA_LOWER_BOUND,
         # hybrid_weights=HYBRID,
         model_file='{}/{}/{}.model'.format(MODEL_DIR, MODEL, exp_name),
         dict_tokenizer='split',
