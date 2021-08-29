@@ -22,8 +22,10 @@ R = 1.2  # decide the size of the persona pool
 USE_ALL_CONCEPT_POOL = False
 USE_TO_PERSONA_POOL = False
 USE_CONTEXT_POOL = False
+DROP_LITERAL_PERSONA = True
 PERSONA_LOWER_BOUND = 0
 CONTEXT_LOWER_BOUND = 0
+BEAM_SIZE = 5
 
 MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-25'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
@@ -60,7 +62,7 @@ def setup_args():
     parser = setup_dict_args()
     exp_name = NAME
     n_epoches = 100
-    beam_size = 2
+    beam_size = BEAM_SIZE
     encode_layers = 2
     decode_layers = 2
     embedding_size = 256
@@ -101,6 +103,7 @@ def setup_args():
         use_all_concept_pool=USE_ALL_CONCEPT_POOL,
         use_context_pool=USE_CONTEXT_POOL,
         use_to_persona_pool=USE_TO_PERSONA_POOL,
+        drop_literal_persona = DROP_LITERAL_PERSONA,
         persona_lower_bound=PERSONA_LOWER_BOUND,
         context_lower_bound=CONTEXT_LOWER_BOUND,
         model_file='{}/{}/{}.model'.format(MODEL_DIR, MODEL, exp_name),

@@ -965,6 +965,7 @@ class TransformerAgent(Agent):
         use_all_concept_pool = self.opt.get('use_all_concept_pool')
         use_context_pool = self.opt.get('use_context_pool')
         use_to_persona_pool = self.opt.get('use_to_persona_pool')
+        drop_literal_persona = self.opt.get('drop_literal_persona')
         context_lower_bound = self.opt.get('context_lower_bound')
         persona_lower_bound = self.opt.get('persona_lower_bound')
         # freeze_gate = self.opt.get('freeze_gate')
@@ -984,6 +985,9 @@ class TransformerAgent(Agent):
         # if concept_pool or persona_pool = 0 then this pool = 1
 
         all_concept_pool = torch.ones_like(context_pool)
+
+        if drop_literal_persona:
+            persona_pool = (persona_pool - persona_kw_mask).clamp(0, 1)
 
         if use_all_concept_pool:
             # print('[ use all concept pool ]')
