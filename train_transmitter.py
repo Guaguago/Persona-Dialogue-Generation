@@ -26,8 +26,8 @@ PERSONA_LOWER_BOUND = 3
 CONTEXT_LOWER_BOUND = 2
 FREEZE_GATE = True
 
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-17'
-DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
+MODEL_DIR = './tmp'
+DATA_DIR = './data'
 
 
 def setup_task():
@@ -46,7 +46,7 @@ def setup_seed(seed=1706123):
 
 
 def gpt_setting():
-    return 10, 1e-4, 'gpt_custom', 1.0
+    return 2, 1e-4, 'gpt_custom', 1.0
 
 
 def lstm_setting():

@@ -34,7 +34,7 @@ class Gpt2SeqModel(nn.Module):
         # idea interface
         self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
         self.gate_linear = nn.Linear(768, 1, bias=False)
-        self.walk_or_jump_gate_linear = nn.Linear(768, 1, bias=False)
+        # self.walk_or_jump_gate_linear = nn.Linear(768, 1, bias=False)
         self.softmax = nn.Softmax(dim=-1)
         self.sigmoid = nn.Sigmoid()
 
@@ -543,8 +543,8 @@ class Gpt2SeqModel(nn.Module):
         with torch.no_grad():
             # initialize presents
             start_token_tensor = prior_context.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
-            jump_probs = jump_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
-            walk_probs = walk_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+            # jump_probs = jump_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+            # walk_probs = walk_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             final_pool = final_pool.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
 
             token_tensor = start_token_tensor
@@ -673,8 +673,8 @@ class Gpt2SeqModel(nn.Module):
             if visualization:
                 logits = outputs.view(batch_size, self.beam_size, -1, 40516)
                 hidden_states = hidden_states.view(batch_size, self.beam_size, -1, 768)
-                walk_probs = walk_probs.view(batch_size, self.beam_size, 2680)
-                jump_probs = jump_probs.view(batch_size, self.beam_size, 2680)
+                # walk_probs = walk_probs.view(batch_size, self.beam_size, 2680)
+                # jump_probs = jump_probs.view(batch_size, self.beam_size, 2680)
                 final_pool = final_pool.view(batch_size, self.beam_size, 2680)
 
             for step in range(batch_size):
@@ -686,8 +686,8 @@ class Gpt2SeqModel(nn.Module):
                 if visualization:
                     best_logits = logits[step, bests[step], src_seq_len: src_seq_len + best_len - 2, :]
                     best_hidden_states = hidden_states[step, bests[step], src_seq_len: src_seq_len + best_len - 2, :]
-                    best_walk_probs = walk_probs[step, bests[step], :].unsqueeze(0)
-                    best_jump_probs = jump_probs[step, bests[step], :].unsqueeze(0)
+                    # best_walk_probs = walk_probs[step, bests[step], :].unsqueeze(0)
+                    # best_jump_probs = jump_probs[step, bests[step], :].unsqueeze(0)
                     best_final_pool = final_pool[step, bests[step], :].unsqueeze(0)
 
                     concept_word_probs = cal_concept_word_probs(logits=best_logits.unsqueeze(0),
@@ -703,8 +703,8 @@ class Gpt2SeqModel(nn.Module):
                                                               concept_word_probs=concept_word_probs,
                                                               gate=gate, lm_mask=None)
 
-                    data_for_visualization[step]['from_context_probs'] = best_walk_probs.squeeze()
-                    data_for_visualization[step]['to_persona_probs'] = best_jump_probs.squeeze()
+                    # data_for_visualization[step]['from_context_probs'] = best_walk_probs.squeeze()
+                    # data_for_visualization[step]['to_persona_probs'] = best_jump_probs.squeeze()
                     data_for_visualization[step]['final_pool'] = [id2keyword[i] for i in
                                                                   torch.where(best_final_pool.squeeze().eq(1))[
                                                                       0].tolist()]

@@ -84,8 +84,8 @@ def visualize_samples(data_for_visualization, dict, valid_inds, observations):
     i = random.randint(0, len(data_for_visualization) - 1)
     prediction = data_for_visualization[i]['prediction']
     final_pool = data_for_visualization[i]['final_pool']
-    from_context_probs = data_for_visualization[i]['from_context_probs']
-    to_persona_probs = data_for_visualization[i]['to_persona_probs']
+    # from_context_probs = data_for_visualization[i]['from_context_probs']
+    # to_persona_probs = data_for_visualization[i]['to_persona_probs']
     # concept_probs = (to_persona_probs * hybrid_weights['jump'] + from_context_probs * hybrid_weights['walk'])
     concept_word_probs = data_for_visualization[i]['concept_word_probs']
     hybrid_word_probs = data_for_visualization[i]['hybrid_word_probs']
@@ -95,8 +95,8 @@ def visualize_samples(data_for_visualization, dict, valid_inds, observations):
     #  construct visulization strings
     line_outputs = dict.vec2words(prediction.tolist())
     vis_prediction = ' '.join(['{:>5}'.format(i) for i in line_outputs])
-    vis_from_context_probs = visualize_topk_nodes_with_values(from_context_probs, id2keyword, k=8, concept=True)
-    vis_to_persona_probs = visualize_topk_nodes_with_values(to_persona_probs, id2keyword, k=8, concept=True)
+    # vis_from_context_probs = visualize_topk_nodes_with_values(from_context_probs, id2keyword, k=8, concept=True)
+    # vis_to_persona_probs = visualize_topk_nodes_with_values(to_persona_probs, id2keyword, k=8, concept=True)
     # vis_concept_probs = visualize_topk_nodes_with_values(concept_probs, id2keyword, k=8, concept=True)
     vis_lm_word_probs = visualize_topk_nodes_with_values(lm_word_probs, dict, k=5, concept=False, matrix=True)
     vis_concept_word_probs = visualize_topk_nodes_with_values(concept_word_probs, dict, k=5, concept=False,
@@ -297,8 +297,9 @@ def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, sof
 
     if use_min:
         d_c2p = \
-        torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * max, masked_matrix).view(batch_size, -1).min(
-            dim=-1)[0]
+            torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * max, masked_matrix).view(batch_size,
+                                                                                                       -1).min(
+                dim=-1)[0]
     else:
         d_c2p = masked_matrix.view(batch_size, -1).sum(dim=-1) / ((masked_matrix.view(batch_size, -1) > 0) + 0.).sum(
             -1).clamp(1e-5)
@@ -508,12 +509,21 @@ def prepare_batch_for_kw_model(obs, device):
     return inputs_for_kw_model
 
 
-def inputs_for_gate_module(tgt_seq, word2concept_map):
+def inputs_for_gate_module(tgt_seq, word2concept_map, pool):
     # len_gate_label = len(src) + len(tgt)
+    bs = tgt_seq.size(0)
+    pool = torch.gather(input=pool, index=word2concept_map.unsqueeze(0).expand(bs, -1), dim=-1)
 
     gate_label = tgt_seq.clone()
     gate_label[gate_label == 0] = -1
-    gate_label[gate_label != -1] = (word2concept_map.gather(0, gate_label[gate_label != -1]) != 0) + 0
+
+    tail = gate_label * gate_label.eq(-1)
+
+    gate_label = torch.gather(input=pool, index=gate_label * gate_label.ne(-1), dim=-1) + 0
+    gate_label = gate_label + tail
+    # gate_label[gate_label != -1] = (pool.gather(-1, gate_label[gate_label != -1])) + 0
+
+    # gate_label[gate_label != -1] = (word2concept_map.gather(0, gate_label[gate_label != -1]) != 0) + 0
 
     gate_mask = (gate_label != -1) + 0
     gate_label.masked_fill_(gate_label == -1, 0)
