@@ -727,26 +727,26 @@ class TransformerAgent(Agent):
         use_all_concept_pool = self.opt.get('use_all_concept_pool')
         use_context_pool = self.opt.get('use_context_pool')
         use_to_persona_pool = self.opt.get('use_to_persona_pool')
-        use_persona_lower_bound = self.opt.get('use_persona_lower_bound')
+        context_lower_bound = self.opt.get('context_lower_bound')
+        persona_lower_bound = self.opt.get('persona_lower_bound')
         r = self.opt.get('r')
 
         next_pool, next_probs = cal_next_pool(kw_logits, self.kw_mask_matrix,
                                               context_concepts, self.model.softmax)
 
-        context_pool = cal_context_pool(context_concepts=context_concepts, device=self.device)
-        # print('【context_pool】{}'.format([id2keyword[i] for i in torch.where(context_pool[0].eq(1))[0].tolist()]))
-        # concept_pool = cal_concept_pool(concept_logits=kw_logits, distance_matrix=self.kw_graph_distance_matrix,
-        #                                 context_concepts=context_concepts, persona_concept_mask=persona_kw_mask,
-        #                                 max_pool_size=50, softmax=self.model.softmax)
+        # if size of pool < lower_bound, then this pool = 0
+        context_pool = cal_context_pool(context_concepts=context_concepts,
+                                        lower_bound=context_lower_bound, device=self.device)
 
-        # if concept_pool = 0 then this pool = 1
+        # if size of pool < lower_bound, then this pool = 0
+        persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
+                                                    r=r, lower_bound=persona_lower_bound)
+
+        # if concept_pool or persona_pool = 0 then this pool = 1
         to_persona_pool = cal_to_persona_pool(distance_matrix=self.kw_graph_distance_matrix,
                                               context_pool=context_pool,
                                               persona_concept_mask=persona_kw_mask,
                                               softmax=self.model.softmax)
-
-        persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
-                                                    r=r, use_persona_lower_bound=use_persona_lower_bound)
 
         all_concept_pool = torch.ones_like(context_pool)
 
@@ -762,12 +762,13 @@ class TransformerAgent(Agent):
             final_pool = persona_pool * to_persona_pool
 
         if use_context_pool:
-            # print('[ add context pool ]')
+            # if persona_pool=0, then this pool=0
             context_pool = context_pool * ((final_pool.eq(0).sum(-1).clamp(0, 1)).unsqueeze(-1))
             final_pool = (final_pool + context_pool).clamp(0, 1)
 
-        if random.random() > 0.97:
-            print('The size of the pool:{}'.format(len(final_pool[3])))
+        has_concept = final_pool.sum(-1).clamp(0, 1).unsqueeze(-1)
+        final_pool = final_pool * has_concept + (1 - has_concept)
+
         # drop_literal = True
         # if drop_literal:
         #     final_pool = ((context_pool + (persona_pool * to_persona_pool)).clamp(0, 1) - persona_kw_mask).clamp(0, 1)

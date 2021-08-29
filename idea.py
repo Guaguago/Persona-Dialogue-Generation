@@ -270,12 +270,17 @@ def cal_concept_pool(concept_logits, distance_matrix, context_concepts, persona_
     return concept_pool, concept_probs
 
 
-def cal_context_pool(context_concepts, device):
+def cal_context_pool(context_concepts, device, lower_bound=0):
     batch_size = context_concepts.size(0)
     context_concept_pool = torch.scatter(input=torch.zeros([batch_size, 2680], dtype=torch.bool, device=device),
                                          src=torch.ones_like(context_concepts, dtype=torch.bool),
                                          index=context_concepts, dim=-1)  # [bs, 2680]
     context_concept_pool[:, 0:2] = 0
+
+    exceed_lower_bound = (context_concept_pool.sum(-1) >= lower_bound).unsqueeze(-1)
+
+    context_concept_pool = context_concept_pool * exceed_lower_bound
+
     return context_concept_pool
 
 
@@ -284,21 +289,26 @@ def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, sof
     matrix = distance_matrix['matrix']
     max = distance_matrix['max']
 
-    has_concept = (context_pool + persona_concept_mask).sum(dim=-1).clamp(0, 1).unsqueeze(-1)  # [bs, 1]
+    has_concept = (context_pool * persona_concept_mask).sum(dim=-1).clamp(0, 1).unsqueeze(-1)  # [bs, 1]
 
-    masked_matrix = context_pool.unsqueeze(-1) * matrix.unsqueeze(0).expand(batch_size, -1, -1) * persona_concept_mask.unsqueeze(1)  # [bs, 2680, 2680]
+    masked_matrix = context_pool.unsqueeze(-1) * matrix.unsqueeze(0).expand(batch_size, -1,
+                                                                            -1) * persona_concept_mask.unsqueeze(
+        1)  # [bs, 2680, 2680]
 
     if use_min:
-        d_c2p = torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * max, masked_matrix).view(batch_size, -1).min(dim=-1)[0]
+        d_c2p = \
+        torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * max, masked_matrix).view(batch_size, -1).min(
+            dim=-1)[0]
     else:
-        d_c2p = masked_matrix.view(batch_size, -1).sum(dim=-1) / ((masked_matrix.view(batch_size, -1) > 0) + 0.).sum(-1).clamp(1e-5)
+        d_c2p = masked_matrix.view(batch_size, -1).sum(dim=-1) / ((masked_matrix.view(batch_size, -1) > 0) + 0.).sum(
+            -1).clamp(1e-5)
     # d_c2p = masked_matrix.view(batch_size, -1).max(dim=-1)[0]
 
     masked_matrix = matrix * persona_concept_mask.unsqueeze(1)
     if use_min:
         d_n2p = torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * max, masked_matrix).min(dim=-1)[0]
     else:
-        d_n2p = masked_matrix.sum(-1) / (((persona_concept_mask) > 0)+0.).sum(-1).unsqueeze(-1).clamp(1e-5)
+        d_n2p = masked_matrix.sum(-1) / (((persona_concept_mask) > 0) + 0.).sum(-1).unsqueeze(-1).clamp(1e-5)
     to_persona_pool = (d_n2p - d_c2p.unsqueeze(-1)) < 0
 
     # No concepts then this pool = 1
@@ -306,14 +316,12 @@ def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, sof
     return to_persona_pool
 
 
-def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, use_persona_lower_bound=False):
-    has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
+def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, lower_bound=0):
+    exceed_lower_bound = (persona_kws.sum(-1) >= lower_bound).unsqueeze(-1)
+    # has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
     matrix = kw_graph_distance_matrix['matrix']
     max = kw_graph_distance_matrix['max']
-    num_persona_kw = persona_kws.sum(-1)
     # print([id2keyword[i] for i in torch.where(persona_kws[0].eq(1))[0].tolist()])
-
-    has_persona_kws = num_persona_kw.clamp(0, 1).unsqueeze(1).expand(-1, len(keyword2id))
     to_persona_matrix = matrix * persona_kws.unsqueeze(1)  # [bs, 2680]
     # mask 后产生 0， 需要将其替换为 max
     to_persona_matrix = torch.where(to_persona_matrix.eq(0), torch.ones_like(to_persona_matrix) * max,
@@ -328,7 +336,7 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, use
     # print([id2keyword[i] for i in probs[0].topk(topk)[1].tolist()])
     # persona_pool = probs > 1e-5
 
-    persona_pool = persona_pool * has_persona
+    persona_pool = persona_pool * exceed_lower_bound
     return persona_pool, persona_probs
 
 
