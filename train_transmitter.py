@@ -24,6 +24,7 @@ USE_TO_PERSONA_POOL = True
 USE_CONTEXT_POOL = True
 PERSONA_LOWER_BOUND = 3
 CONTEXT_LOWER_BOUND = 2
+FREEZE_GATE = True
 
 MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-17'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
@@ -80,7 +81,7 @@ def setup_args():
     select_persona = False
     shuffle_persona = True
     share_decoder_input_output_embed = False
-    num_train_epochs = 4
+    num_train_epochs = 8
 
     if ARCH_CHOICE == 'gpt':
         batchsize, lr, optimizer, gradient_clip = gpt_setting()
@@ -103,6 +104,7 @@ def setup_args():
         use_to_persona_pool=USE_TO_PERSONA_POOL,
         persona_lower_bound=PERSONA_LOWER_BOUND,
         context_lower_bound=CONTEXT_LOWER_BOUND,
+        freeze_gate=FREEZE_GATE,
         model_file='{}/{}/{}.model'.format(MODEL_DIR, MODEL, exp_name),
         dict_tokenizer='split',
         datatype='train',

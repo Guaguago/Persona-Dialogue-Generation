@@ -729,6 +729,7 @@ class TransformerAgent(Agent):
         use_to_persona_pool = self.opt.get('use_to_persona_pool')
         context_lower_bound = self.opt.get('context_lower_bound')
         persona_lower_bound = self.opt.get('persona_lower_bound')
+        freeze_gate = self.opt.get('freeze_gate')
         r = self.opt.get('r')
 
         next_pool, next_probs = cal_next_pool(kw_logits, self.kw_mask_matrix,
@@ -784,6 +785,8 @@ class TransformerAgent(Agent):
 
         if is_training:
             self.model.train()
+            if freeze_gate:
+                self.model.gate_linear.requires_grad_(False)
             self.zero_grad()
             out = None
 
@@ -805,7 +808,7 @@ class TransformerAgent(Agent):
                                          concept2words_map=self.concept2words_map,
                                          # hybrid_weights=hybrid_weights,
                                          visualization=visualization,
-                                         final_pool=all_concept_pool)
+                                         final_pool=final_pool)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 
