@@ -20,14 +20,13 @@ IS_ORIGINAL = True
 GEN, GATE, CLS = 1., 1., 1.
 R = 1.2  # decide the size of the persona pool
 USE_ALL_CONCEPT_POOL = False
-USE_TO_PERSONA_POOL = True
-USE_CONTEXT_POOL = True
-PERSONA_LOWER_BOUND = 3
-CONTEXT_LOWER_BOUND = 2
-FREEZE_GATE = True
+USE_TO_PERSONA_POOL = False
+USE_CONTEXT_POOL = False
+PERSONA_LOWER_BOUND = 0
+CONTEXT_LOWER_BOUND = 0
 
-MODEL_DIR = './tmp'
-DATA_DIR = './data'
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-25'
+DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 
 def setup_task():
@@ -46,7 +45,7 @@ def setup_seed(seed=1706123):
 
 
 def gpt_setting():
-    return 2, 1e-4, 'gpt_custom', 1.0
+    return 10, 1e-4, 'gpt_custom', 1.0
 
 
 def lstm_setting():
@@ -104,7 +103,6 @@ def setup_args():
         use_to_persona_pool=USE_TO_PERSONA_POOL,
         persona_lower_bound=PERSONA_LOWER_BOUND,
         context_lower_bound=CONTEXT_LOWER_BOUND,
-        freeze_gate=FREEZE_GATE,
         model_file='{}/{}/{}.model'.format(MODEL_DIR, MODEL, exp_name),
         dict_tokenizer='split',
         datatype='train',
