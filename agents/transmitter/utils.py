@@ -605,7 +605,7 @@ class PaddingUtils(object):
             curr = batch_reply[valid_inds[i]]
 
             if vis is not None and len(vis) > 0:
-                concept = vis[valid_inds[i]]['final_pool']
+                concept = vis[i]['final_pool']
                 curr['concepts'] = concept
 
             output_tokens = []
