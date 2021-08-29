@@ -977,7 +977,7 @@ class TransformerAgent(Agent):
 
         # if size of pool < lower_bound, then this pool = 0
         persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
-                                                    r=1.0, lower_bound=persona_lower_bound)
+                                                    r=r, lower_bound=persona_lower_bound)
 
         # next_pool, next_probs = cal_next_pool(kw_logits, self.kw_mask_matrix,
         #                                       context_concepts, self.model.softmax)
