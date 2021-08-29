@@ -328,7 +328,7 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, low
     to_persona_matrix = torch.where(to_persona_matrix.eq(0), torch.ones_like(to_persona_matrix) * max,
                                     to_persona_matrix)
 
-    persona_pool = to_persona_matrix.min(dim=-1)[0] < r
+    persona_pool = (to_persona_matrix.min(dim=-1)[0] < r) + 0.
 
     logits = max - to_persona_matrix.min(dim=-1)[0]
     logits = top_k_logits(logits, 100)
