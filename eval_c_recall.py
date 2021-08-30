@@ -54,7 +54,7 @@ if __name__ == '__main__':
         model_file=model_name,
         gpu=0,
         batchsize=10,
-        beam_size=2,
+        beam_size=BEAM_SIZE,
         display_examples=False,
         eval_c_recall=True,
         persona_pool_r=PERSONA_POOL_R,
