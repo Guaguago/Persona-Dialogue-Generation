@@ -18,7 +18,9 @@ MODEL = 'transmitter'
 NAME = "pegg-o"
 IS_ORIGINAL = True
 GEN, GATE, CLS = 1., 1., 1.
-NEXT_POOL_SIZE = 300
+
+MIDDLE_POOL_SIZE = 100
+NEXT_POOL_SIZE = None
 PERSONA_POOL_R = None
 USE_TO_PERSONA_POOL = False
 USE_CONTEXT_POOL = False
@@ -100,6 +102,7 @@ def setup_args():
         cls_weight=CLS,
         datapath=DATA_DIR,
         persona_pool_r=PERSONA_POOL_R,
+        middle_pool_size=MIDDLE_POOL_SIZE,
         next_pool_size=NEXT_POOL_SIZE,
         use_context_pool=USE_CONTEXT_POOL,
         use_to_persona_pool=USE_TO_PERSONA_POOL,

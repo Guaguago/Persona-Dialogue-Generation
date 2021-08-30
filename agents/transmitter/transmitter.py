@@ -30,7 +30,8 @@ from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
 from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, cal_word2concept_map, \
-    visualize_samples, cal_concept2word_map, cal_concept_pool, cal_to_persona_pool, cal_context_pool, id2keyword
+    visualize_samples, cal_concept2word_map, cal_concept_pool, cal_to_persona_pool, cal_context_pool, id2keyword, \
+    cal_middle_pool
 from idea import get_keyword_mask_matrix, get_kw_graph_distance_matrix
 from idea import cal_kw_logits, cal_next_pool, cal_persona_pool
 from idea import prepare_example_persona_kws, prepare_batch_persona_kw_mask
@@ -962,6 +963,7 @@ class TransformerAgent(Agent):
 
         # get hyper-parameters
         # use_all_concept_pool = self.opt.get('use_all_concept_pool')
+        middle_pool_size = self.opt.get('middle_pool_size')
         next_pool_size = self.opt.get('next_pool_size')
         persona_pool_r = self.opt.get('persona_pool_r')
         use_context_pool = self.opt.get('use_context_pool')
@@ -974,7 +976,13 @@ class TransformerAgent(Agent):
         context_pool = cal_context_pool(context_concepts=context_concepts,
                                         lower_bound=context_lower_bound, device=self.device)
 
-        if next_pool_size is not None:
+        if middle_pool_size is not None:
+            middle_pool = cal_middle_pool(distance_matrix=self.kw_graph_distance_matrix,
+                                          context_pool=context_pool, topk=middle_pool_size,
+                                          persona_concept_mask=persona_kw_mask,
+                                          softmax=self.model.softmax)
+            final_pool = middle_pool
+        elif next_pool_size is not None:
             kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, self.kw_mask_matrix, self.model.kw_model)
             # if context_pool = 0, then this pool = 1
             next_pool, next_probs = cal_next_pool(logits=kw_logits, topk=next_pool_size,

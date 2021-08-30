@@ -2,7 +2,8 @@ from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
 IS_ORIGINAL = True
 MODEL_DIR = 'train-o-18'
-NEXT_POOL_SIZE = 300
+MIDDLE_POOL_SIZE = 100
+NEXT_POOL_SIZE = None
 PERSONA_POOL_R = None
 USE_TO_PERSONA_POOL = False
 USE_CONTEXT_POOL = False
@@ -58,6 +59,7 @@ if __name__ == '__main__':
         display_examples=False,
         eval_c_recall=True,
         persona_pool_r=PERSONA_POOL_R,
+        middle_pool_size=MIDDLE_POOL_SIZE,
         next_pool_size=NEXT_POOL_SIZE,
         use_context_pool=USE_CONTEXT_POOL,
         use_to_persona_pool=USE_TO_PERSONA_POOL,

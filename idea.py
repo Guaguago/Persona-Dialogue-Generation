@@ -319,6 +319,22 @@ def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, sof
     return to_persona_pool
 
 
+def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax, topk):
+    max = distance_matrix['max']
+    matrix = distance_matrix['matrix']
+    end_pool = context_pool + persona_concept_mask
+
+    num_end = end_pool.sum(-1).unsqueeze(-1)
+
+    masked_matrix = matrix * end_pool.unsqueeze(1)
+    logits = max - (masked_matrix.sum(-1) / (num_end.clamp(1e-5)))
+
+    probs = softmax(top_k_logits(logits, topk))
+    pool = probs > 1e-5
+
+    return pool
+
+
 def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, lower_bound=0):
     exceed_lower_bound = (persona_kws.sum(-1) >= lower_bound).unsqueeze(-1)
     # has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
