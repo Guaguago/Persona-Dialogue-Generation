@@ -226,17 +226,19 @@ def have_concepts_in(common_ground_one_turn):
     return common_ground_one_turn.sum() > 1
 
 
-def cal_next_pool(logits, kw_mask_matrix, context_kws, softmax, topk=5):
+def cal_next_pool(logits, context_pool, softmax, topk=300):
     # neighbors = kw_mask_matrix[context_kws].sum(dim=1).clamp(min=0, max=1)  # (keyword_vocab_size)
     # kw_logits: (vocab, )
     # num_neighbors = neighbors.sum(1).long()
     # has_neighbors = num_neighbors.clamp(0, 1).unsqueeze(1).expand(-1, kw_logits.size(-1))
     # neighbor_filter = kw_logits * ((1 - has_neighbors) + neighbors)
     # logits = walk_logits(neighbor_filter, 10)
+    has_context = context_pool.eq(1).sum(dim=-1).clamp(0, 1).unsqueeze(-1)  # [bs, 1]
     if topk is not None:
         logits = top_k_logits(logits, topk)
     probs = softmax(logits / 1.0)
     pool = probs > 1e-5
+    pool = pool * has_context + (1 - has_context)
     return pool, probs
 
 

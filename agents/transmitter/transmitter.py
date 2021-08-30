@@ -958,50 +958,48 @@ class TransformerAgent(Agent):
         # idea
         persona_kw_mask = prepare_batch_persona_kw_mask(observations, device=self.device)
         data_for_kw_model = prepare_batch_for_kw_model(observations, device=self.device)
-        # kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, self.kw_mask_matrix, self.model.kw_model)
         context_concepts = data_for_kw_model['batch_context_keywords']
 
         # get hyper-parameters
-        use_all_concept_pool = self.opt.get('use_all_concept_pool')
+        # use_all_concept_pool = self.opt.get('use_all_concept_pool')
+        next_pool_size = self.opt.get('next_pool_size')
+        persona_pool_r = self.opt.get('persona_pool_r')
         use_context_pool = self.opt.get('use_context_pool')
         use_to_persona_pool = self.opt.get('use_to_persona_pool')
         drop_literal_persona = self.opt.get('drop_literal_persona')
         context_lower_bound = self.opt.get('context_lower_bound')
         persona_lower_bound = self.opt.get('persona_lower_bound')
-        # freeze_gate = self.opt.get('freeze_gate')
-        r = self.opt.get('r')
 
         # if size of pool < lower_bound, then this pool = 0
         context_pool = cal_context_pool(context_concepts=context_concepts,
                                         lower_bound=context_lower_bound, device=self.device)
 
-        # if size of pool < lower_bound, then this pool = 0
-        persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.model.softmax,
-                                                    r=r, lower_bound=persona_lower_bound)
-
-        # next_pool, next_probs = cal_next_pool(kw_logits, self.kw_mask_matrix,
-        #                                       context_concepts, self.model.softmax)
-
-        # if concept_pool or persona_pool = 0 then this pool = 1
-
-        all_concept_pool = torch.ones_like(context_pool)
-
-        if drop_literal_persona:
-            persona_pool = (persona_pool - persona_kw_mask).clamp(0, 1)
-
-        if use_all_concept_pool:
-            # print('[ use all concept pool ]')
-            final_pool = all_concept_pool
-        else:
-            # print('[ use persona pool ]')
+        if next_pool_size is not None:
+            kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, self.kw_mask_matrix, self.model.kw_model)
+            # if context_pool = 0, then this pool = 1
+            next_pool, next_probs = cal_next_pool(logits=kw_logits, topk=next_pool_size,
+                                                  context_pool=context_pool,
+                                                  softmax=self.model.softmax)
+            final_pool = next_pool
+        elif persona_pool_r is not None:
+            # if size of pool < lower_bound, then this pool = 0
+            persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask,
+                                                        self.model.softmax,
+                                                        r=persona_pool_r, lower_bound=persona_lower_bound)
             final_pool = persona_pool
+            if drop_literal_persona:
+                final_pool = (persona_pool - persona_kw_mask).clamp(0, 1)
+        else:
+            all_concept_pool = torch.ones_like(context_pool)
+            final_pool = all_concept_pool
 
         if use_to_persona_pool:
+            # if concept_pool or persona_pool = 0 then this pool = 1
             to_persona_pool = cal_to_persona_pool(distance_matrix=self.kw_graph_distance_matrix,
                                                   context_pool=context_pool,
                                                   persona_concept_mask=persona_kw_mask,
                                                   softmax=self.model.softmax)
-            final_pool = persona_pool * to_persona_pool
+            final_pool = final_pool * to_persona_pool
 
         if use_context_pool:
             # if persona_pool=0, then this pool=0
