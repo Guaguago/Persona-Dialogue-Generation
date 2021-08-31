@@ -211,14 +211,12 @@ class Gpt2SeqModel(nn.Module):
                         # TODO: note the candidate doesn't own a END symbol,
                         #  so we ignore the score form last word -> EOS and EOS -> pad
                         cand_logits = cand_logits[..., src_seq_len:-1, :].contiguous()
+                        lm_word_probs = cal_lm_word_probs(logits=cand_logits, softmax=self.softmax)
+                        concept_word_probs = cal_concept_word_probs(logits=cand_logits,
+                                                                    final_pool=final_pool,
+                                                                    concept2words_map=concept2words_map,
+                                                                    softmax=self.softmax)
                         gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
-                        lm_word_probs = self.softmax(cand_logits)
-                        concept_word_probs = cal_concept_word_probs(walk_probs[ind].unsqueeze(0).expand(20, -1),
-                                                                    jump_probs[ind].unsqueeze(0).expand(20, -1),
-                                                                    hybrid_weights, concept2words_map, cand_logits,
-                                                                    self.softmax, final_pool=final_pool)
-                        gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
-
                         hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask=None)
 
                         hybrid_word_probs = hybrid_word_probs.clamp(min=1e-6)
