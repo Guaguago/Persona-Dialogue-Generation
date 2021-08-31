@@ -375,7 +375,7 @@ def cal_concept_word_probs(logits, final_pool, concept2words_map, softmax, tempe
     if final_pool is not None:
         # [bs, 2680]
         topk_concept2words_map = (final_pool.unsqueeze(-1) * concept2words_map).view(batch_size, -1)
-        assert topk_concept2words_map.size() == (batch_size, 2680 * 7)
+        # assert topk_concept2words_map.size() == (batch_size, 2680 * 7)
 
         # map to the word vocab
         idx = topk_concept2words_map.unsqueeze(1).expand(-1, output_len, -1).type(torch.int64)
