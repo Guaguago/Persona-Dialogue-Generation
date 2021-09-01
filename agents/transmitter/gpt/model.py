@@ -702,13 +702,20 @@ class Gpt2SeqModel(nn.Module):
                     # best_walk_probs = walk_probs[step, bests[step], :].unsqueeze(0)
                     # best_jump_probs = jump_probs[step, bests[step], :].unsqueeze(0)
                     best_final_pool = final_pool[step, bests[step], :].unsqueeze(0)
-
-                    concept_word_probs = cal_concept_word_probs(logits=best_logits.unsqueeze(0),
-                                                                concept2words_map=concept2words_map,
-                                                                final_pool=best_final_pool,
-                                                                softmax=self.softmax)
-
                     lm_word_probs = cal_lm_word_probs(logits=best_logits.unsqueeze(0), softmax=self.softmax)
+
+                    # concept_word_probs = cal_concept_word_probs(logits=best_logits.unsqueeze(0),
+                    #                                             concept2words_map=concept2words_map,
+                    #                                             final_pool=best_final_pool,
+                    #                                             softmax=self.softmax)
+
+                    concept_word_probs = cal_concept_word_probs_attention(
+                        embed=self.transformer_module.transformer.tokens_embed.weight,
+                        hidden=best_hidden_states.unsqueeze(0),
+                        lm_word_probs=lm_word_probs,
+                        final_pool=best_final_pool, softmax=self.softmax,
+                        concept2words_map=concept2words_map)
+
 
                     gate = self.sigmoid(self.gate_linear(best_hidden_states).unsqueeze(0))
 
