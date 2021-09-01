@@ -443,6 +443,10 @@ def cal_concept_word_probs_attention(embed, hidden, final_pool, concept2words_ma
     concept_words = final_pool.unsqueeze(-1) * concept2words_map
 
     # [bs, topk, 7]
+
+    print('concept2words_map: {}'.format(concept2words_map.size()))
+    print('concept_words: {}'.format(concept_words.size()))
+
     top_concept2word_map = concept2words_map.unsqueeze(0).expand(batch_size, -1, -1)[
         concept_words.sum(-1).gt(0).type(torch.bool)].view(
         batch_size, -1, 7)
