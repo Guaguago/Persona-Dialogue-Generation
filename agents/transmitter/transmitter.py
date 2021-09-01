@@ -980,7 +980,8 @@ class TransformerAgent(Agent):
             middle_pool = cal_middle_pool(distance_matrix=self.kw_graph_distance_matrix,
                                           context_pool=context_pool, topk=middle_pool_size,
                                           persona_concept_mask=persona_kw_mask,
-                                          softmax=self.model.softmax)
+                                          softmax=self.model.softmax,
+                                          concept2words_map=self.concept2words_map)
             final_pool = middle_pool
         elif next_pool_size is not None:
             kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, self.kw_mask_matrix, self.model.kw_model)

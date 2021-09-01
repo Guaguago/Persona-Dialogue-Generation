@@ -319,7 +319,7 @@ def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, sof
     return to_persona_pool
 
 
-def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax, topk):
+def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax, topk, concept2words_map):
     max = distance_matrix['max']
     matrix = distance_matrix['matrix']
     end_pool = context_pool + persona_concept_mask
@@ -328,6 +328,9 @@ def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax
 
     masked_matrix = matrix * end_pool.unsqueeze(1)
     logits = max - (masked_matrix.sum(-1) / (num_end.clamp(1e-5)))
+
+    # 去掉 GPT 词典中没有的 concept
+    logits = logits * concept2words_map.sum(-1).ne(0)
 
     probs = softmax(top_k_logits(logits, topk))
     pool = probs > 1e-5
@@ -444,8 +447,8 @@ def cal_concept_word_probs_attention(embed, hidden, final_pool, concept2words_ma
 
     # [bs, topk, 7]
 
-    print('concept2words_map: {}'.format(concept2words_map.size()))
-    print('concept_words: {}'.format(concept_words.size()))
+    # print('concept2words_map: {}'.format(concept2words_map.size()))
+    # print('concept_words: {}'.format(concept_words.size()))
 
     top_concept2word_map = concept2words_map.unsqueeze(0).expand(batch_size, -1, -1)[
         concept_words.sum(-1).gt(0).type(torch.bool)].view(
@@ -454,7 +457,8 @@ def cal_concept_word_probs_attention(embed, hidden, final_pool, concept2words_ma
     topk = top_concept2word_map.size(1)
 
     top_concept_word_p = torch.gather(dim=-1,
-                                      input=lm_word_probs.unsqueeze(-2).expand(-1, -1, top_concept2word_map.size(-2), -1),
+                                      input=lm_word_probs.unsqueeze(-2).expand(-1, -1, top_concept2word_map.size(-2),
+                                                                               -1),
                                       index=top_concept2word_map.unsqueeze(1).expand(-1, output_len, -1, -1).type(
                                           torch.int64))
     # [bs, len, top]
@@ -462,8 +466,8 @@ def cal_concept_word_probs_attention(embed, hidden, final_pool, concept2words_ma
 
     # [bs, len, top, 1] after lm prob to choose in each concept group
     concept2word_idx = torch.gather(input=top_concept2word_map.unsqueeze(1).expand(-1, output_len, -1, -1),
-                                           index=max_idx.unsqueeze(-1),
-                                           dim=-1).squeeze(-1)
+                                    index=max_idx.unsqueeze(-1),
+                                    dim=-1).squeeze(-1)
 
     concept_embed = embed[concept2word_idx.type(torch.long)]
     scores = torch.bmm(concept_embed.view(-1, topk, 768), hidden.unsqueeze(-1).contiguous().view(-1, 768, 1)).view(
