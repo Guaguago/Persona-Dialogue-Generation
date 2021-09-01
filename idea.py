@@ -329,11 +329,16 @@ def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax
     masked_matrix = matrix * end_pool.unsqueeze(1)
     logits = max - (masked_matrix.sum(-1) / (num_end.clamp(1e-5)))
 
-    # 去掉 GPT 词典中没有的 concept
+    # 去掉 GPT 词典中没有的 concept for attention calculation
     logits = logits * concept2words_map.sum(-1).ne(0)
 
     probs = softmax(top_k_logits(logits, topk))
-    pool = probs > 1e-5
+
+    # 精确 topk 个数，for attention calculation
+    pool = torch.scatter(input=torch.zeros_like(probs),
+                         index=probs.topk(topk)[1],
+                         src=torch.ones_like(probs),
+                         dim=-1)
 
     return pool
 
