@@ -432,6 +432,43 @@ def cal_concept_word_probs(logits, final_pool, concept2words_map, softmax, tempe
     return concept_word_probs
 
 
+def cal_concept_word_probs_attention(embed, hidden, final_pool, concept2words_map, lm_word_probs, softmax):
+    assert len(hidden.size()) == 3
+    assert len(final_pool.size()) == 2
+
+    batch_size = hidden.size(0)
+    output_len = hidden.size(1)
+
+    # [bs, 2680, 7]
+    concept_words = final_pool.unsqueeze(-1) * concept2words_map
+
+    # [bs, topk, 7]
+    top_concept2word_map = concept2words_map.unsqueeze(0).expand(batch_size, -1, -1)[
+        concept_words.sum(-1).gt(0).type(torch.bool)].view(
+        batch_size, -1, 7)
+
+    topk = top_concept2word_map.size(1)
+
+    top_concept_word_p = torch.gather(dim=-1,
+                                      input=lm_word_probs.unsqueeze(-2).expand(-1, -1, top_concept2word_map.size(-2), -1),
+                                      index=top_concept2word_map.unsqueeze(1).expand(-1, output_len, -1, -1).type(
+                                          torch.int64))
+    # [bs, len, top]
+    max_idx = top_concept_word_p.max(-1)[1]
+
+    # [bs, len, top, 1] after lm prob to choose in each concept group
+    concept2word_idx = torch.gather(input=top_concept2word_map.unsqueeze(1).expand(-1, output_len, -1, -1),
+                                           index=max_idx.unsqueeze(-1),
+                                           dim=-1).squeeze(-1)
+
+    concept_embed = embed[concept2word_idx.type(torch.long)]
+    scores = torch.bmm(concept_embed.view(-1, topk, 768), hidden.unsqueeze(-1).contiguous().view(-1, 768, 1)).view(
+        batch_size, output_len, topk, -1).squeeze(-1)
+
+    probs = torch.scatter(input=torch.zeros_like(lm_word_probs), src=softmax(scores), index=concept2word_idx, dim=-1)
+    return probs
+
+
 def cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask, ablation=False):
     # jump or walk [10, 2680]
     assert len(gate.size()) == 3
@@ -469,7 +506,7 @@ def cal_concept2word_map(word_concept_map, device):
     for i in range(1, 2680):
         concept2words_idx = torch.where(word_concept_map.eq(i))[0]
         lists.append(torch.cat([concept2words_idx, torch.zeros(7 - len(concept2words_idx)).to(device)]).tolist())
-    concept2word_map = torch.tensor(lists)
+    concept2word_map = torch.tensor(lists, dtype=torch.int64)
     return concept2word_map.to(device)
     # # list = [word_concept_map.eq(i).sum().item() for i in range(2680)]
     # # max = torch.tensor(list).topk(10)[0]

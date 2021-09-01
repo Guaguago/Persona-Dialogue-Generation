@@ -6,7 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
 import os
-from idea import load_kw_model, cal_concept_word_probs, cal_hybrid_word_probs, id2keyword, cal_lm_word_probs
+from idea import load_kw_model, cal_concept_word_probs, cal_hybrid_word_probs, id2keyword, cal_lm_word_probs, \
+    cal_concept_word_probs_attention
 
 
 class Gpt2SeqModel(nn.Module):
@@ -107,12 +108,19 @@ class Gpt2SeqModel(nn.Module):
             # lm labels should mask the source sentence language model
             shift_logits = lm_logits[..., src_seq_len:-1, :].contiguous()
 
-            concept_word_probs = cal_concept_word_probs(logits=shift_logits,
-                                                        final_pool=final_pool,
-                                                        concept2words_map=concept2words_map,
-                                                        softmax=self.softmax)
-
             lm_word_probs = cal_lm_word_probs(logits=shift_logits, softmax=self.softmax)
+
+            concept_word_probs = cal_concept_word_probs_attention(
+                embed=self.transformer_module.transformer.tokens_embed.weight,
+                hidden=hidden_states[..., src_seq_len:-1, :],
+                lm_word_probs=lm_word_probs,
+                final_pool=final_pool, softmax=self.softmax,
+                concept2words_map=concept2words_map)
+
+            # concept_word_probs = cal_concept_word_probs(logits=shift_logits,
+            #                                             final_pool=final_pool,
+            #                                             concept2words_map=concept2words_map,
+            #                                             softmax=self.softmax)
 
             gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
 
@@ -550,12 +558,19 @@ class Gpt2SeqModel(nn.Module):
                 outputs, hidden_states = self.transformer_module.forward(token_tensor)
                 logits = outputs[:, -1, :]
 
-                concept_word_probs = cal_concept_word_probs(logits=logits.unsqueeze(1),
-                                                            final_pool=final_pool,
-                                                            concept2words_map=concept2words_map,
-                                                            softmax=self.softmax)
+                # concept_word_probs = cal_concept_word_probs(logits=logits.unsqueeze(1),
+                #                                             final_pool=final_pool,
+                #                                             concept2words_map=concept2words_map,
+                #                                             softmax=self.softmax)
 
                 lm_word_probs = cal_lm_word_probs(logits=logits.unsqueeze(1), softmax=self.softmax)
+
+                concept_word_probs = cal_concept_word_probs_attention(
+                    embed=self.transformer_module.transformer.tokens_embed.weight,
+                    hidden=hidden_states[:, -1, :].unsqueeze(1),
+                    lm_word_probs=lm_word_probs,
+                    final_pool=final_pool, softmax=self.softmax,
+                    concept2words_map=concept2words_map)
 
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :])).unsqueeze(1)
                 hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs=lm_word_probs,
