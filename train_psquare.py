@@ -25,6 +25,7 @@ USE_CONTEXT_POOL = False
 DROP_LITERAL_PERSONA = False
 PERSONA_LOWER_BOUND = 0
 CONTEXT_LOWER_BOUND = 0
+USE_ATTENTION = False
 BEAM_SIZE = 2
 
 MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-18'
@@ -59,14 +60,16 @@ def setup_args():
     # exp_name = 'DEBUG'
     parser.set_defaults(
         # idea add ================
-        persona_pool_r=PERSONA_POOL_R,
         middle_pool_size=MIDDLE_POOL_SIZE,
+        persona_pool_size=PERSONA_POOL_SIZE,
         next_pool_size=NEXT_POOL_SIZE,
         use_context_pool=USE_CONTEXT_POOL,
         use_to_persona_pool=USE_TO_PERSONA_POOL,
         drop_literal_persona=DROP_LITERAL_PERSONA,
         persona_lower_bound=PERSONA_LOWER_BOUND,
         context_lower_bound=CONTEXT_LOWER_BOUND,
+        use_attention=USE_ATTENTION,
+        persona_pool_r=PERSONA_POOL_R,
         # =======================
         download_path='{}/downloads'.format(DATA_DIR),
         datapath=DATA_DIR,

@@ -145,7 +145,7 @@ def visualize_topk_nodes_with_values(tensor, vocab, k=10, concept=False, matrix=
 
 
 def cal_final_reward(fcg_score, agent_a_coherent_reward, agent_a_language_reward):
-    reward_a_list = fcg_score + 0.5 * agent_a_coherent_reward + agent_a_language_reward
+    reward_a_list = fcg_score + agent_a_coherent_reward + agent_a_language_reward
     reward_a_baseline = reward_a_list.mean(axis=0, keepdims=True)
     reward_a_list = reward_a_list - reward_a_baseline
     return reward_a_list
@@ -318,6 +318,67 @@ def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, sof
     # No concepts then this pool = 1
     to_persona_pool = to_persona_pool * has_concept + (1 - has_concept)
     return to_persona_pool
+
+
+def cal_final_pool(opt, context_concepts, persona_kw_mask, kw_graph_distance_matrix, device,
+                   data_for_kw_model, concept2words_map, softmax, kw_mask_matrix, kw_model):
+    middle_pool_size = opt.get('middle_pool_size')
+    next_pool_size = opt.get('next_pool_size')
+    persona_pool_r = opt.get('persona_pool_r')
+    persona_pool_size = opt.get('persona_pool_size')
+    use_context_pool = opt.get('use_context_pool')
+    use_to_persona_pool = opt.get('use_to_persona_pool')
+    drop_literal_persona = opt.get('drop_literal_persona')
+    context_lower_bound = opt.get('context_lower_bound')
+    persona_lower_bound = opt.get('persona_lower_bound')
+
+    # if size of pool < lower_bound, then this pool = 0
+    context_pool = cal_context_pool(context_concepts=context_concepts,
+                                    lower_bound=context_lower_bound, device=device)
+
+    if middle_pool_size is not None:
+        middle_pool = cal_middle_pool(distance_matrix=kw_graph_distance_matrix,
+                                      context_pool=context_pool, topk=middle_pool_size,
+                                      persona_concept_mask=persona_kw_mask,
+                                      softmax=softmax,
+                                      concept2words_map=concept2words_map)
+        final_pool = middle_pool
+    elif next_pool_size is not None:
+        kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, kw_mask_matrix, kw_model)
+        # if context_pool = 0, then this pool = 1
+        next_pool, next_probs = cal_next_pool(logits=kw_logits, topk=next_pool_size,
+                                              context_pool=context_pool,
+                                              softmax=softmax)
+        final_pool = next_pool
+    elif persona_pool_r is not None or persona_pool_size is not None:
+        # if size of pool < lower_bound, then this pool = 0
+        persona_pool, jump_probs = cal_persona_pool(kw_graph_distance_matrix, persona_kw_mask,
+                                                    softmax, topk=persona_pool_size,
+                                                    r=persona_pool_r, lower_bound=persona_lower_bound,
+                                                    concept2words_map=concept2words_map)
+        final_pool = persona_pool
+        if drop_literal_persona:
+            final_pool = (persona_pool - persona_kw_mask).clamp(0, 1)
+    else:
+        all_concept_pool = torch.ones_like(context_pool)
+        final_pool = all_concept_pool
+
+    if use_to_persona_pool:
+        # if concept_pool or persona_pool = 0 then this pool = 1
+        to_persona_pool = cal_to_persona_pool(distance_matrix=kw_graph_distance_matrix,
+                                              context_pool=context_pool,
+                                              persona_concept_mask=persona_kw_mask,
+                                              softmax=softmax)
+        final_pool = final_pool * to_persona_pool
+
+    if use_context_pool:
+        # if persona_pool=0, then this pool=0
+        context_pool = context_pool * ((final_pool.eq(0).sum(-1).clamp(0, 1)).unsqueeze(-1))
+        final_pool = (final_pool + context_pool).clamp(0, 1)
+
+    has_concept = final_pool.sum(-1).clamp(0, 1).unsqueeze(-1)
+    final_pool = final_pool * has_concept + (1 - has_concept)
+    return final_pool
 
 
 def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax, topk, concept2words_map):
