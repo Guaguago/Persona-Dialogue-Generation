@@ -39,17 +39,18 @@ def prepare_batch_persona_kw_mask(obs, device):
 
 
 def get_kw_graph_distance_matrix(path, device):
+    MAX = 100
     kw_graph_distance_matrix = torch.ones((len(keyword2id), len(keyword2id))).to(device) * -1
     kw_graph_distance_dict = load_pickle(path)
     for node1, node2 in kw_graph_distance_dict.keys():
         kw_graph_distance_matrix[keyword2id[node1], keyword2id[node2]] = kw_graph_distance_dict[(node1, node2)]
     kw_graph_distance_matrix[torch.isinf(kw_graph_distance_matrix)] = -1.
     max_distance = kw_graph_distance_matrix.max().item()
-    kw_graph_distance_matrix = torch.where(kw_graph_distance_matrix == -1,
-                                           torch.ones_like(kw_graph_distance_matrix) * max_distance,
+    kw_graph_distance_matrix = torch.where(kw_graph_distance_matrix.eq(-1),
+                                           torch.ones_like(kw_graph_distance_matrix) * MAX,
                                            kw_graph_distance_matrix)
     min_distance = kw_graph_distance_matrix.view(-1).topk(2680, largest=False)[0].unique()[1].item()
-    kw_graph_distance_matrix = torch.where(0 == kw_graph_distance_matrix,
+    kw_graph_distance_matrix = torch.where(kw_graph_distance_matrix.eq(0),
                                            torch.ones_like(kw_graph_distance_matrix) * min_distance,
                                            kw_graph_distance_matrix)
     return {'matrix': kw_graph_distance_matrix, 'max': max_distance, 'min': min_distance}
@@ -351,7 +352,7 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, low
     # print([id2keyword[i] for i in torch.where(persona_kws[0].eq(1))[0].tolist()])
     to_persona_matrix = matrix * persona_kws.unsqueeze(1)  # [bs, 2680]
     # mask 后产生 0， 需要将其替换为 max
-    to_persona_matrix = torch.where(to_persona_matrix.eq(0), torch.ones_like(to_persona_matrix) * max,
+    to_persona_matrix = torch.where(to_persona_matrix.eq(0), torch.ones_like(to_persona_matrix) * 100,
                                     to_persona_matrix)
 
     persona_pool = (to_persona_matrix.min(dim=-1)[0] < r) + 0.
@@ -361,9 +362,11 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, low
     persona_probs = softmax(logits / 0.25)
 
     # print([id2keyword[i] for i in probs[0].topk(topk)[1].tolist()])
+    # print([id2keyword[i] for i inpersona_pool.tolist()])
     # persona_pool = probs > 1e-5
 
     persona_pool = persona_pool * exceed_lower_bound
+    # print([id2keyword[i] for i, j in enumerate(persona_pool[0].tolist()) if j == 1])
     return persona_pool, persona_probs
 
 
