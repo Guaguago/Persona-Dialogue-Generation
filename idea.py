@@ -344,7 +344,8 @@ def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax
     return pool
 
 
-def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, lower_bound=0, topk=None):
+def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, lower_bound=0, topk=None,
+                     concept2words_map=None):
     exceed_lower_bound = (persona_kws.sum(-1) >= lower_bound).unsqueeze(-1)
     # has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
     matrix = kw_graph_distance_matrix['matrix']
@@ -356,6 +357,11 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, low
                                     to_persona_matrix)
 
     logits = max - to_persona_matrix.min(dim=-1)[0]
+
+    # 去掉 GPT 词典中没有的 concept for attention calculation
+    logits = logits * concept2words_map.sum(-1).ne(0)
+    logits = torch.where(logits.eq(0), torch.ones_like(logits) * -1e10, logits)
+
     logits = top_k_logits(logits, topk)
     probs = softmax(logits)
 
