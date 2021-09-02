@@ -35,7 +35,7 @@ class Gpt2SeqModel(nn.Module):
         # idea interface
         self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
         self.gate_linear = nn.Linear(768, 1, bias=False)
-        # self.walk_or_jump_gate_linear = nn.Linear(768, 1, bias=False)
+        self.walk_or_jump_gate_linear = nn.Linear(768, 1, bias=False)
         self.softmax = nn.Softmax(dim=-1)
         self.sigmoid = nn.Sigmoid()
 
