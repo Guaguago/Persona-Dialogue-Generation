@@ -28,6 +28,7 @@ PERSONA_LOWER_BOUND = 0
 CONTEXT_LOWER_BOUND = 0
 USE_ATTENTION = False
 BEAM_SIZE = 2
+MODEL_NAME = 'fcg_bot'
 
 MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-18'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
@@ -54,7 +55,7 @@ def setup_args():
         exp_task = 'tasks.convai2.agents:RevisedTeacher,tasks.convai2.agents:RevisedPersonaTeacher'
         exp_eval_task = 'tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands'
 
-    exp_name = 'psquare_bot'
+    exp_name = MODEL_NAME
     validation_max = -1
     train_display = 300
 
