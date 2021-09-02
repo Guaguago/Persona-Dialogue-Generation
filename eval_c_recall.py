@@ -10,6 +10,7 @@ USE_CONTEXT_POOL = False
 DROP_LITERAL_PERSONA = False
 PERSONA_LOWER_BOUND = 0
 CONTEXT_LOWER_BOUND = 0
+USE_ATTENTION = False
 BEAM_SIZE = 2
 
 def setup_task():
@@ -63,9 +64,10 @@ if __name__ == '__main__':
         next_pool_size=NEXT_POOL_SIZE,
         use_context_pool=USE_CONTEXT_POOL,
         use_to_persona_pool=USE_TO_PERSONA_POOL,
-        drop_literal_persona = DROP_LITERAL_PERSONA,
+        drop_literal_persona=DROP_LITERAL_PERSONA,
         persona_lower_bound=PERSONA_LOWER_BOUND,
         context_lower_bound=CONTEXT_LOWER_BOUND,
+        use_attention=USE_ATTENTION,
     )
     opt = parser.parse_args(print_args=False)
     eval_f1(opt, print_parser=parser)
