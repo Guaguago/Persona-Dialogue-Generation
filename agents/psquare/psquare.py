@@ -914,7 +914,8 @@ class PSquareAgent(Agent):
                                                    tgt_seq=tgt_seq,
                                                    tgt_seq_turn=tgt_seq_turn,
                                                    word2concept_map=self.word2concept_map,
-                                                   concept2words_map=self.concept2words_map)
+                                                   concept2words_map=self.concept2words_map,
+                                                   final_pool=final_pool)
                     predictions, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
                     # idx = predictions.unsqueeze(dim=2)
                     # loss = self.criterion(scores, idx)
