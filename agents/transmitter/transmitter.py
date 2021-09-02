@@ -31,7 +31,7 @@ from agents.common.gpt_dictionary import GPTDictionaryAgent
 # idea interface
 from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, cal_word2concept_map, \
     visualize_samples, cal_concept2word_map, cal_concept_pool, cal_to_persona_pool, cal_context_pool, id2keyword, \
-    cal_middle_pool
+    cal_middle_pool, cal_final_pool
 from idea import get_keyword_mask_matrix, get_kw_graph_distance_matrix
 from idea import cal_kw_logits, cal_next_pool, cal_persona_pool
 from idea import prepare_example_persona_kws, prepare_batch_persona_kw_mask
@@ -964,65 +964,9 @@ class TransformerAgent(Agent):
         data_for_kw_model = prepare_batch_for_kw_model(observations, device=self.device)
         context_concepts = data_for_kw_model['batch_context_keywords']
 
-        # get hyper-parameters
-        # use_all_concept_pool = self.opt.get('use_all_concept_pool')
-        middle_pool_size = self.opt.get('middle_pool_size')
-        next_pool_size = self.opt.get('next_pool_size')
-        persona_pool_r = self.opt.get('persona_pool_r')
-        persona_pool_size = self.opt.get('persona_pool_size')
-        use_context_pool = self.opt.get('use_context_pool')
-        use_to_persona_pool = self.opt.get('use_to_persona_pool')
-        drop_literal_persona = self.opt.get('drop_literal_persona')
-        context_lower_bound = self.opt.get('context_lower_bound')
-        persona_lower_bound = self.opt.get('persona_lower_bound')
-        use_attention = self.opt.get('use_attention')
-
-        # if size of pool < lower_bound, then this pool = 0
-        context_pool = cal_context_pool(context_concepts=context_concepts,
-                                        lower_bound=context_lower_bound, device=self.device)
-
-        if middle_pool_size is not None:
-            middle_pool = cal_middle_pool(distance_matrix=self.kw_graph_distance_matrix,
-                                          context_pool=context_pool, topk=middle_pool_size,
-                                          persona_concept_mask=persona_kw_mask,
-                                          softmax=self.model.softmax,
-                                          concept2words_map=self.concept2words_map)
-            final_pool = middle_pool
-        elif next_pool_size is not None:
-            kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, self.kw_mask_matrix, self.model.kw_model)
-            # if context_pool = 0, then this pool = 1
-            next_pool, next_probs = cal_next_pool(logits=kw_logits, topk=next_pool_size,
-                                                  context_pool=context_pool,
-                                                  softmax=self.model.softmax)
-            final_pool = next_pool
-        elif persona_pool_r is not None or persona_pool_size is not None:
-            # if size of pool < lower_bound, then this pool = 0
-            persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask,
-                                                        self.model.softmax,
-                                                        r=persona_pool_r, lower_bound=persona_lower_bound,
-                                                        topk=persona_pool_size)
-            final_pool = persona_pool
-            if drop_literal_persona:
-                final_pool = (persona_pool - persona_kw_mask).clamp(0, 1)
-        else:
-            all_concept_pool = torch.ones_like(context_pool)
-            final_pool = all_concept_pool
-
-        if use_to_persona_pool:
-            # if concept_pool or persona_pool = 0 then this pool = 1
-            to_persona_pool = cal_to_persona_pool(distance_matrix=self.kw_graph_distance_matrix,
-                                                  context_pool=context_pool,
-                                                  persona_concept_mask=persona_kw_mask,
-                                                  softmax=self.model.softmax)
-            final_pool = final_pool * to_persona_pool
-
-        if use_context_pool:
-            # if persona_pool=0, then this pool=0
-            context_pool = context_pool * ((final_pool.eq(0).sum(-1).clamp(0, 1)).unsqueeze(-1))
-            final_pool = (final_pool + context_pool).clamp(0, 1)
-
-        has_concept = final_pool.sum(-1).clamp(0, 1).unsqueeze(-1)
-        final_pool = final_pool * has_concept + (1 - has_concept)
+        final_pool = cal_final_pool(self.opt, context_concepts, persona_kw_mask, self.kw_graph_distance_matrix,
+                                    self.device, data_for_kw_model, self.concept2words_map, self.model.softmax,
+                                    self.kw_mask_matrix, self.model.kw_model)
 
         # final pool -> gate label
         data_for_gate = inputs_for_gate_module(tgt_seq, self.word2concept_map, pool=final_pool)
@@ -1036,6 +980,8 @@ class TransformerAgent(Agent):
         if src_seq is None:
             # no valid examples, just return empty responses
             return batch_reply
+
+        use_attention = self.opt.get('use_attention')
 
         # produce best_pred, train on targets if availables
         cand_inds = [i[0] for i in valid_cands] if valid_cands is not None else None
