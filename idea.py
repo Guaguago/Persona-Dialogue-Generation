@@ -344,7 +344,7 @@ def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax
     return pool
 
 
-def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, lower_bound=0):
+def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, lower_bound=0, topk=None):
     exceed_lower_bound = (persona_kws.sum(-1) >= lower_bound).unsqueeze(-1)
     # has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
     matrix = kw_graph_distance_matrix['matrix']
@@ -355,19 +355,26 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, low
     to_persona_matrix = torch.where(to_persona_matrix.eq(0), torch.ones_like(to_persona_matrix) * 100,
                                     to_persona_matrix)
 
-    persona_pool = (to_persona_matrix.min(dim=-1)[0] < r) + 0.
-
     logits = max - to_persona_matrix.min(dim=-1)[0]
-    logits = top_k_logits(logits, 100)
-    persona_probs = softmax(logits / 0.25)
+    logits = top_k_logits(logits, topk)
+    probs = softmax(logits)
+
+    if r is not None:
+        pool = (to_persona_matrix.min(dim=-1)[0] < r) + 0.
+    else:
+        # 精确 topk 个数，for attention calculation
+        pool = torch.scatter(input=torch.zeros_like(probs),
+                             index=probs.topk(topk)[1],
+                             src=torch.ones_like(probs),
+                             dim=-1)
 
     # print([id2keyword[i] for i in probs[0].topk(topk)[1].tolist()])
     # print([id2keyword[i] for i inpersona_pool.tolist()])
     # persona_pool = probs > 1e-5
 
-    persona_pool = persona_pool * exceed_lower_bound
+    pool = pool * exceed_lower_bound
     # print([id2keyword[i] for i, j in enumerate(persona_pool[0].tolist()) if j == 1])
-    return persona_pool, persona_probs
+    return pool, probs
 
 
 def cal_lm_word_probs(logits, softmax):

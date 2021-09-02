@@ -2,9 +2,10 @@ from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
 IS_ORIGINAL = True
 MODEL_DIR = 'train-o-18'
-MIDDLE_POOL_SIZE = 100
+MIDDLE_POOL_SIZE = None
 NEXT_POOL_SIZE = None
 PERSONA_POOL_R = None
+PERSONA_POOL_SIZE = 50
 USE_TO_PERSONA_POOL = False
 USE_CONTEXT_POOL = False
 DROP_LITERAL_PERSONA = False
@@ -59,8 +60,9 @@ if __name__ == '__main__':
         beam_size=BEAM_SIZE,
         display_examples=False,
         eval_c_recall=True,
-        persona_pool_r=PERSONA_POOL_R,
+        # ===================
         middle_pool_size=MIDDLE_POOL_SIZE,
+        persona_pool_size=PERSONA_POOL_SIZE,
         next_pool_size=NEXT_POOL_SIZE,
         use_context_pool=USE_CONTEXT_POOL,
         use_to_persona_pool=USE_TO_PERSONA_POOL,
@@ -68,6 +70,8 @@ if __name__ == '__main__':
         persona_lower_bound=PERSONA_LOWER_BOUND,
         context_lower_bound=CONTEXT_LOWER_BOUND,
         use_attention=USE_ATTENTION,
+        persona_pool_r=PERSONA_POOL_R
+        # ===================
     )
     opt = parser.parse_args(print_args=False)
     eval_f1(opt, print_parser=parser)
