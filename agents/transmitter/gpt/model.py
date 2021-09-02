@@ -562,6 +562,7 @@ class Gpt2SeqModel(nn.Module):
             for step in range(self.longest_label):
                 outputs, hidden_states = self.transformer_module.forward(token_tensor)
                 logits = outputs[:, -1, :]
+                lm_word_probs = cal_lm_word_probs(logits=logits.unsqueeze(1), softmax=self.softmax)
 
                 if use_attention:
                     concept_word_probs = cal_concept_word_probs_attention(
@@ -576,8 +577,6 @@ class Gpt2SeqModel(nn.Module):
                         final_pool=final_pool,
                         concept2words_map=concept2words_map,
                         softmax=self.softmax)
-
-                lm_word_probs = cal_lm_word_probs(logits=logits.unsqueeze(1), softmax=self.softmax)
 
                 gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :])).unsqueeze(1)
                 hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs=lm_word_probs,

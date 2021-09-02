@@ -969,6 +969,7 @@ class TransformerAgent(Agent):
         middle_pool_size = self.opt.get('middle_pool_size')
         next_pool_size = self.opt.get('next_pool_size')
         persona_pool_r = self.opt.get('persona_pool_r')
+        persona_pool_size = self.opt.get('persona_pool_size')
         use_context_pool = self.opt.get('use_context_pool')
         use_to_persona_pool = self.opt.get('use_to_persona_pool')
         drop_literal_persona = self.opt.get('drop_literal_persona')
@@ -994,11 +995,12 @@ class TransformerAgent(Agent):
                                                   context_pool=context_pool,
                                                   softmax=self.model.softmax)
             final_pool = next_pool
-        elif persona_pool_r is not None:
+        elif persona_pool_r is not None or persona_pool_size is not None:
             # if size of pool < lower_bound, then this pool = 0
             persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask,
                                                         self.model.softmax,
-                                                        r=persona_pool_r, lower_bound=persona_lower_bound)
+                                                        r=persona_pool_r, lower_bound=persona_lower_bound,
+                                                        topk=persona_pool_size)
             final_pool = persona_pool
             if drop_literal_persona:
                 final_pool = (persona_pool - persona_kw_mask).clamp(0, 1)
