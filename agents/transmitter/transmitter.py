@@ -710,7 +710,8 @@ class TransformerAgent(Agent):
         return obs
 
     def predict(self, src_seq, src_seq_turn, src_seq_dis, tgt_seq=None, tgt_seq_turn=None, cands=None, valid_cands=None,
-                sampling_cands=None, is_training=False, idea_interface=None, visualization=False, final_pool=None):
+                sampling_cands=None, is_training=False, idea_interface=None, visualization=False, final_pool=None,
+                use_attention=False):
         """Produce a prediction from our model.
 
         Update the model using the targets if available, otherwise rank
@@ -742,9 +743,9 @@ class TransformerAgent(Agent):
                                          lm_mask=lm_mask,
                                          word2concept_map=self.word2concept_map,
                                          concept2words_map=self.concept2words_map,
-                                         # hybrid_weights=hybrid_weights,
+                                         final_pool=final_pool,
                                          visualization=visualization,
-                                         final_pool=final_pool)
+                                         use_attention=use_attention)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 
@@ -806,7 +807,8 @@ class TransformerAgent(Agent):
                                      word2concept_map=self.word2concept_map,
                                      concept2words_map=self.concept2words_map,
                                      visualization=visualization,
-                                     final_pool=final_pool)
+                                     final_pool=final_pool,
+                                     use_attention=use_attention)
             predictions, cand_preds = out[0], out[2]  # 生成example过程
             data_for_visualization = out[5]
 
@@ -822,7 +824,8 @@ class TransformerAgent(Agent):
                                          # hybrid_weights=hybrid_weights,
                                          word2concept_map=self.word2concept_map,
                                          concept2words_map=self.concept2words_map,
-                                         final_pool=final_pool)
+                                         final_pool=final_pool,
+                                         use_attention=use_attention)
 
                 hybrid_probs = out[1]
 
@@ -971,6 +974,7 @@ class TransformerAgent(Agent):
         drop_literal_persona = self.opt.get('drop_literal_persona')
         context_lower_bound = self.opt.get('context_lower_bound')
         persona_lower_bound = self.opt.get('persona_lower_bound')
+        use_attention = self.opt.get('use_attention')
 
         # if size of pool < lower_bound, then this pool = 0
         context_pool = cal_context_pool(context_concepts=context_concepts,
@@ -1038,7 +1042,8 @@ class TransformerAgent(Agent):
                                                                        cand_inds, sampling_cands, is_training,
                                                                        idea_interface=idea_dict,
                                                                        visualization=self.opt['visualization'],
-                                                                       final_pool=final_pool)
+                                                                       final_pool=final_pool,
+                                                                       use_attention=use_attention)
 
         if is_training:
             report_freq = 0

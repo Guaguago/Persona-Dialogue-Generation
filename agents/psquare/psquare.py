@@ -23,10 +23,11 @@ from agents.transmitter.gpt.optim import GPTOptimizer
 from torch import autograd
 import json
 from agents.psquare.utils import LanguageModel
-from idea import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_map
+from idea import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_map, cal_context_pool, \
+    cal_middle_pool, cal_to_persona_pool, inputs_for_gate_module
 from idea import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model
 from idea import cal_word2concept_map, get_keyword_mask_matrix, get_kw_graph_distance_matrix
-from idea import cal_kw_logits, cal_walk_probs, cal_jump_probs
+from idea import cal_kw_logits, cal_next_pool, cal_persona_pool
 from idea import cal_finding_common_ground_score
 import torch.nn as nn
 
@@ -348,7 +349,7 @@ class PSquareAgent(Agent):
             # idea interface
             self.device = shared['device']
             self.word2concept_map = shared['word2concept_map']
-            self.concept2word_mask = shared['concept2word_mask']
+            self.concept2words_map = shared['concept2words_map']
             self.kw_mask_matrix = shared['kw_mask_matrix']
             self.kw_graph_distance_matrix = shared['kw_graph_distance_matrix']
 
@@ -384,7 +385,7 @@ class PSquareAgent(Agent):
 
             # idea interface
             self.word2concept_map = cal_word2concept_map(self.dict, self.device)
-            self.concept2word_mask = cal_concept2word_map(self.word2concept_map, self.device)
+            self.concept2words_map = cal_concept2word_map(self.word2concept_map, self.device)
 
             self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
             self.kw_graph_distance_matrix = get_kw_graph_distance_matrix(
@@ -547,7 +548,7 @@ class PSquareAgent(Agent):
         # idea interface
         shared['device'] = self.device
         shared['word2concept_map'] = self.word2concept_map
-        shared['concept2word_mask'] = self.concept2word_mask
+        shared['concept2words_map'] = self.concept2words_map
         shared['kw_mask_matrix'] = self.kw_mask_matrix
         shared['kw_graph_distance_matrix'] = self.kw_graph_distance_matrix
 
@@ -678,12 +679,72 @@ class PSquareAgent(Agent):
         # idea interface
         persona_kw_mask = prepare_batch_persona_kw_mask(observations, device=self.device)
         data_for_kw_model = prepare_batch_for_kw_model(observations, device=self.device)
+        context_concepts = data_for_kw_model['batch_context_keywords']
+
+        # get hyper-parameters
+        # use_all_concept_pool = self.opt.get('use_all_concept_pool')
+        middle_pool_size = self.opt.get('middle_pool_size')
+        next_pool_size = self.opt.get('next_pool_size')
+        persona_pool_r = self.opt.get('persona_pool_r')
+        use_context_pool = self.opt.get('use_context_pool')
+        use_to_persona_pool = self.opt.get('use_to_persona_pool')
+        drop_literal_persona = self.opt.get('drop_literal_persona')
+        context_lower_bound = self.opt.get('context_lower_bound')
+        persona_lower_bound = self.opt.get('persona_lower_bound')
+
+        # if size of pool < lower_bound, then this pool = 0
+        context_pool = cal_context_pool(context_concepts=context_concepts,
+                                        lower_bound=context_lower_bound, device=self.device)
+
+        if middle_pool_size is not None:
+            middle_pool = cal_middle_pool(distance_matrix=self.kw_graph_distance_matrix,
+                                          context_pool=context_pool, topk=middle_pool_size,
+                                          persona_concept_mask=persona_kw_mask,
+                                          softmax=self.transmitter.softmax,
+                                          concept2words_map=self.concept2words_map)
+            final_pool = middle_pool
+        elif next_pool_size is not None:
+            kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, self.kw_mask_matrix,
+                                                        self.transmitter.kw_model)
+            # if context_pool = 0, then this pool = 1
+            next_pool, next_probs = cal_next_pool(logits=kw_logits, topk=next_pool_size,
+                                                  context_pool=context_pool,
+                                                  softmax=self.transmitter.softmax)
+            final_pool = next_pool
+        elif persona_pool_r is not None:
+            # if size of pool < lower_bound, then this pool = 0
+            persona_pool, jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask,
+                                                        self.transmitter.softmax,
+                                                        r=persona_pool_r, lower_bound=persona_lower_bound)
+            final_pool = persona_pool
+            if drop_literal_persona:
+                final_pool = (persona_pool - persona_kw_mask).clamp(0, 1)
+        else:
+            all_concept_pool = torch.ones_like(context_pool)
+            final_pool = all_concept_pool
+
+        if use_to_persona_pool:
+            # if concept_pool or persona_pool = 0 then this pool = 1
+            to_persona_pool = cal_to_persona_pool(distance_matrix=self.kw_graph_distance_matrix,
+                                                  context_pool=context_pool,
+                                                  persona_concept_mask=persona_kw_mask,
+                                                  softmax=self.transmitter.softmax)
+            final_pool = final_pool * to_persona_pool
+
+        if use_context_pool:
+            # if persona_pool=0, then this pool=0
+            context_pool = context_pool * ((final_pool.eq(0).sum(-1).clamp(0, 1)).unsqueeze(-1))
+            final_pool = (final_pool + context_pool).clamp(0, 1)
+
+        has_concept = final_pool.sum(-1).clamp(0, 1).unsqueeze(-1)
+        final_pool = final_pool * has_concept + (1 - has_concept)
 
         cand_inds = [i[0] for i in valid_cands] if valid_cands is not None else None
         predictions, cand_preds = self.transmitter_predict(src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn,
                                                            cands, cand_inds, is_training,
                                                            data_for_kw_model=data_for_kw_model,
-                                                           persona_kw_mask=persona_kw_mask)
+                                                           persona_kw_mask=persona_kw_mask,
+                                                           final_pool=final_pool)
 
         if self.is_training:
             report_freq = 0
@@ -827,7 +888,8 @@ class PSquareAgent(Agent):
         return self.observation
 
     def transmitter_predict(self, src_seq, src_seq_turn, src_seq_dis, tgt_seq=None, tgt_seq_turn=None, cands=None,
-                            valid_cands=None, is_training=False, data_for_kw_model=None, persona_kw_mask=None):
+                            valid_cands=None, is_training=False, data_for_kw_model=None, persona_kw_mask=None,
+                            final_pool=None):
         """Produce a prediction from our transmitter.
 
         Keep track of gradients if is_training
@@ -836,11 +898,11 @@ class PSquareAgent(Agent):
         predictions, cand_preds = None, None
 
         # idea interface: for both train and generation codes.
-        kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, self.kw_mask_matrix, self.transmitter.kw_model)
-        walk_probs = cal_walk_probs(kw_logits, self.kw_mask_matrix,
-                                    data_for_kw_model['batch_context_keywords'], self.transmitter.softmax)
-        jump_probs = cal_jump_probs(self.kw_graph_distance_matrix, persona_kw_mask, self.transmitter.softmax)
-        hybrid_weights = self.opt['hybrid_weights']
+        # kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, self.kw_mask_matrix, self.transmitter.kw_model)
+        # walk_probs = cal_next_pool(kw_logits, self.kw_mask_matrix,
+        #                            data_for_kw_model['batch_context_keywords'], self.transmitter.softmax)
+        # jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.transmitter.softmax)
+        # hybrid_weights = self.opt['hybrid_weights']
 
         if is_training:
             self.transmitter.train()
@@ -851,11 +913,8 @@ class PSquareAgent(Agent):
                                                    src_seq_dis=src_seq_dis,
                                                    tgt_seq=tgt_seq,
                                                    tgt_seq_turn=tgt_seq_turn,
-                                                   jump_probs=jump_probs,
-                                                   walk_probs=walk_probs,
                                                    word2concept_map=self.word2concept_map,
-                                                   concept2word_mask=self.concept2word_mask,
-                                                   hybrid_weights=hybrid_weights)
+                                                   concept2words_map=self.concept2words_map)
                     predictions, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
                     # idx = predictions.unsqueeze(dim=2)
                     # loss = self.criterion(scores, idx)
@@ -877,10 +936,9 @@ class PSquareAgent(Agent):
                                                    src_seq_turn=src_seq_turn,
                                                    src_seq_dis=src_seq_dis,
                                                    sampling=False,
-                                                   walk_probs=walk_probs,
-                                                   jump_probs=jump_probs,
-                                                   hybrid_weights=hybrid_weights,
-                                                   word2concept_map=self.word2concept_map)
+                                                   word2concept_map=self.word2concept_map,
+                                                   concept2words_map=self.concept2words_map,
+                                                   final_pool=final_pool)
                     # generated response
                     predictions, hybrid_probs, cand_preds = out[0], out[1], out[2]
                     self.metrics['num_selfplay_turns'] += 1
@@ -889,10 +947,9 @@ class PSquareAgent(Agent):
                                                    src_seq_turn=src_seq_turn,
                                                    src_seq_dis=src_seq_dis,
                                                    sampling=True,
-                                                   walk_probs=walk_probs,
-                                                   jump_probs=jump_probs,
-                                                   hybrid_weights=hybrid_weights,
-                                                   word2concept_map=self.word2concept_map)
+                                                   word2concept_map=self.word2concept_map,
+                                                   concept2words_map=self.concept2words_map,
+                                                   final_pool=final_pool)
                     # generated response
                     predictions, hybrid_probs, cand_preds = out[0], out[1], out[2]
                     idx = predictions.unsqueeze(dim=2)
@@ -929,24 +986,22 @@ class PSquareAgent(Agent):
                                                rank_during_training=cands is not None,
                                                cands=cands,
                                                valid_cands=valid_cands,
-                                               jump_probs=jump_probs,
-                                               walk_probs=walk_probs,
-                                               hybrid_weights=hybrid_weights,
-                                               word2concept_map=self.word2concept_map)
+                                               word2concept_map=self.word2concept_map,
+                                               concept2words_map=self.concept2words_map,
+                                               final_pool=final_pool)
                 predictions, cand_preds = out[0], out[2]
                 if tgt_seq is not None:
                     # calculate loss on targets
-                    out = self.transmitter(src_seq=src_seq,
-                                           src_seq_turn=src_seq_turn,
-                                           src_seq_dis=src_seq_dis,
-                                           tgt_seq=tgt_seq,
-                                           tgt_seq_turn=tgt_seq_turn,
-                                           cands=cands,
-                                           valid_cands=valid_cands,
-                                           jump_probs=jump_probs,
-                                           walk_probs=walk_probs,
-                                           hybrid_weights=hybrid_weights,
-                                           word2concept_map=self.word2concept_map)
+                    out = self.transmitter.forward(src_seq=src_seq,
+                                                   src_seq_turn=src_seq_turn,
+                                                   src_seq_dis=src_seq_dis,
+                                                   tgt_seq=tgt_seq,
+                                                   tgt_seq_turn=tgt_seq_turn,
+                                                   cands=cands,
+                                                   valid_cands=valid_cands,
+                                                   word2concept_map=self.word2concept_map,
+                                                   concept2words_map=self.concept2words_map,
+                                                   final_pool=final_pool)
                     # scores = out[1]
                     # loss = self.criterion(scores, tgt_seq)
                     hybrid_probs = out[1]

@@ -17,8 +17,8 @@ from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 MODEL = 'transmitter'
 NAME = "pegg-o"
 IS_ORIGINAL = True
-GEN, GATE, CLS = 1., 1., 1.
 
+GEN, GATE, CLS = 1., 1., 1.
 MIDDLE_POOL_SIZE = 100
 NEXT_POOL_SIZE = None
 PERSONA_POOL_R = None
@@ -27,6 +27,7 @@ USE_CONTEXT_POOL = False
 DROP_LITERAL_PERSONA = False
 PERSONA_LOWER_BOUND = 0
 CONTEXT_LOWER_BOUND = 0
+USE_ATTENTION = False
 BEAM_SIZE = 2
 
 MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-25'
@@ -106,9 +107,10 @@ def setup_args():
         next_pool_size=NEXT_POOL_SIZE,
         use_context_pool=USE_CONTEXT_POOL,
         use_to_persona_pool=USE_TO_PERSONA_POOL,
-        drop_literal_persona = DROP_LITERAL_PERSONA,
+        drop_literal_persona=DROP_LITERAL_PERSONA,
         persona_lower_bound=PERSONA_LOWER_BOUND,
         context_lower_bound=CONTEXT_LOWER_BOUND,
+        use_attention=USE_ATTENTION,
         model_file='{}/{}/{}.model'.format(MODEL_DIR, MODEL, exp_name),
         dict_tokenizer='split',
         datatype='train',
