@@ -292,7 +292,7 @@ def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, sof
     matrix = distance_matrix['matrix']
     max = distance_matrix['max']
 
-    has_concept = (context_pool * persona_concept_mask).sum(dim=-1).clamp(0, 1).unsqueeze(-1)  # [bs, 1]
+    has_concept = (context_pool + persona_concept_mask).sum(dim=-1).clamp(0, 1).unsqueeze(-1)  # [bs, 1]
 
     masked_matrix = context_pool.unsqueeze(-1) * matrix.unsqueeze(0).expand(batch_size, -1,
                                                                             -1) * persona_concept_mask.unsqueeze(
@@ -369,7 +369,7 @@ def cal_final_pool(opt, context_concepts, persona_kw_mask, kw_graph_distance_mat
                                               context_pool=context_pool,
                                               persona_concept_mask=persona_kw_mask,
                                               softmax=softmax)
-        final_pool = final_pool * to_persona_pool
+        final_pool = (final_pool + to_persona_pool).clamp(0, 1)
 
     if use_context_pool:
         # if persona_pool=0, then this pool=0
@@ -407,6 +407,7 @@ def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax
 
 def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, lower_bound=0, topk=None,
                      concept2words_map=None):
+    probs = None
     exceed_lower_bound = (persona_kws.sum(-1) >= lower_bound).unsqueeze(-1)
     # has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
     matrix = kw_graph_distance_matrix['matrix']
@@ -419,16 +420,15 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, low
 
     logits = max - to_persona_matrix.min(dim=-1)[0]
 
-    # 去掉 GPT 词典中没有的 concept for attention calculation
-    logits = logits * concept2words_map.sum(-1).ne(0)
-    logits = torch.where(logits.eq(0), torch.ones_like(logits) * -1e10, logits)
-
-    logits = top_k_logits(logits, topk)
-    probs = softmax(logits)
-
     if r is not None:
         pool = (to_persona_matrix.min(dim=-1)[0] < r) + 0.
     else:
+        # 去掉 GPT 词典中没有的 concept for attention calculation
+        logits = logits * concept2words_map.sum(-1).ne(0)
+        logits = torch.where(logits.eq(0), torch.ones_like(logits) * -1e10, logits)
+
+        logits = top_k_logits(logits, topk)
+        probs = softmax(logits)
         # 精确 topk 个数，for attention calculation
         pool = torch.scatter(input=torch.zeros_like(probs),
                              index=probs.topk(topk)[1],
