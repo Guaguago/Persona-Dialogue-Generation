@@ -1140,8 +1140,9 @@ class PSquareAgent(Agent):
             print('【send_tensor size】{}'.format(send_tensor.size()))
             print('【send_tensor】\n{}'.format(send_tensor))
             send_tensor = send_tensor.view(send_tensor.size(0) * send_tensor.size(1), -1)[
-                send_tensor.view(send_tensor.size(0) * send_tensor.size(1), -1).sum(-1).ne(0)].view(
-                send_tensor.size(0), self.opt.get('max_turn'), -1)
+                send_tensor.view(send_tensor.size(0) * send_tensor.size(1), -1).sum(-1).ne(0) * send_tensor.view(
+                    send_tensor.size(0) * send_tensor.size(1), -1).sum(-1).ne(40484)].view(send_tensor.size(0), 3, -1)
+
             print('【send_tensor after】\n{}'.format(send_tensor))
 
         sorted_score = self.coherent_model.score_sentence(receive_tensor, send_tensor)
