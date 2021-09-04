@@ -1168,7 +1168,7 @@ class PSquareAgent(Agent):
         if self.use_cuda:
             xs = xs.cuda(cuda_device)
 
-        print('【normal shape】 {}'.format(xs.size()))
+        # print('【normal shape】 {}'.format(xs.size()))
 
         try:
             sorted_score = self.language_model.score_sentence(xs)
