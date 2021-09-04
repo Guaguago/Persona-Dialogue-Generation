@@ -153,7 +153,7 @@ class Gpt2SeqModel(nn.Module):
             else:
                 prior_dis = None
 
-            if sampling:  # 2 pegg for A
+            if sampling:  # FCG Bot A
                 predictions, hybrid_word_probs, hidden_states = self.sample_decoding(batch_size, prior_context,
                                                                                      prior_dis,
                                                                                      walk_probs, jump_probs,
@@ -161,7 +161,7 @@ class Gpt2SeqModel(nn.Module):
                                                                                      final_pool=final_pool)
                 gate = self.sigmoid(self.gate_linear(hidden_states))
 
-            elif self.training:  # B generate in 2 pegg
+            elif self.training:  # FCG Bot B
                 predictions, hybrid_word_probs, hidden_states = self.train_greedy_decoding(batch_size, prior_context,
                                                                                            prior_dis,
                                                                                            concept2words_map=concept2words_map,
@@ -424,7 +424,7 @@ class Gpt2SeqModel(nn.Module):
         return pred_output, score_output, hidden_states
 
     def sample_decoding(self, batch_size, prior_context, prior_dis, walk_probs, jump_probs,
-                        concept2words_map=None, final_pool=None):
+                        concept2words_map=None, final_pool=None, temperature=1.0):
         """
         This function is used to simulate the Learned Agent in self-play
         The parameter topk specifies the sampling space at each decoding step.
@@ -446,11 +446,11 @@ class Gpt2SeqModel(nn.Module):
             last_logits = logits
             last_hiddens = hidden_states
             # logits, _ = self.transformer_module.forward(past)
-            logits = logits[:, -1, :] / self.temperature
+            logits2 = logits[:, -1, :]
 
-            lm_word_probs = cal_lm_word_probs(logits=logits.unsqueeze(1), softmax=self.softmax)
+            lm_word_probs = cal_lm_word_probs(logits=logits2.unsqueeze(1), softmax=self.softmax)
 
-            concept_word_probs = cal_concept_word_probs(logits=logits.unsqueeze(1),
+            concept_word_probs = cal_concept_word_probs(logits=logits2.unsqueeze(1),
                                                         final_pool=final_pool,
                                                         concept2words_map=concept2words_map,
                                                         softmax=self.softmax)

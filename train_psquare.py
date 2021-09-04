@@ -16,17 +16,8 @@ from scripts.train_model_selfplay import setup_args as setup_args_dict, TrainLoo
 
 IS_ORIGINAL = True
 
-GEN, GATE, CLS = 1., 1., 1.
-MIDDLE_POOL_SIZE = None
-NEXT_POOL_SIZE = None
-PERSONA_POOL_R = 1.0
-PERSONA_POOL_SIZE = None
-USE_TO_PERSONA_POOL = False
-USE_CONTEXT_POOL = False
-DROP_LITERAL_PERSONA = False
-PERSONA_LOWER_BOUND = 0
-CONTEXT_LOWER_BOUND = 0
-USE_ATTENTION = False
+FCG, RECALL, COHE, LM = 1., 1., 1., 1.
+
 BEAM_SIZE = 2
 MODEL_NAME = 'fcg_bot'
 
@@ -62,16 +53,6 @@ def setup_args():
     # exp_name = 'DEBUG'
     parser.set_defaults(
         # idea add ================
-        middle_pool_size=MIDDLE_POOL_SIZE,
-        persona_pool_size=PERSONA_POOL_SIZE,
-        next_pool_size=NEXT_POOL_SIZE,
-        use_context_pool=USE_CONTEXT_POOL,
-        use_to_persona_pool=USE_TO_PERSONA_POOL,
-        drop_literal_persona=DROP_LITERAL_PERSONA,
-        persona_lower_bound=PERSONA_LOWER_BOUND,
-        context_lower_bound=CONTEXT_LOWER_BOUND,
-        use_attention=USE_ATTENTION,
-        persona_pool_r=PERSONA_POOL_R,
         # =======================
         download_path='{}/downloads'.format(DATA_DIR),
         datapath=DATA_DIR,

@@ -893,7 +893,7 @@ class PSquareAgent(Agent):
                     # generated response
                     predictions, hybrid_probs, cand_preds = out[0], out[1], out[2]
                     self.metrics['num_selfplay_turns'] += 1
-                else:  # 2pegg for A
+                else:  # 2pegg for A sampling
                     out = self.transmitter.forward(src_seq=src_seq,
                                                    src_seq_turn=src_seq_turn,
                                                    src_seq_dis=src_seq_dis,
@@ -1193,11 +1193,12 @@ class PSquareAgent(Agent):
         send_messages_list = [[message.replace(self.dict.end_token, '') for message in interaction]
                               for interaction in send_messages_list]
 
-        scores = cal_finding_common_ground_score(send_messages_list, receive_messages_list,
+        fcg_rewards, recall_rewards = cal_finding_common_ground_score(send_messages_list, receive_messages_list,
                                                  self.persona_transmitter, partner_persona,
                                                  self.kw_graph_distance_matrix, self.device)
-        scores = torch.tensor(scores).cpu().numpy()
-        return scores
+        fcg_rewards = torch.tensor(fcg_rewards).cpu().numpy()
+        recall_rewards = torch.tensor(recall_rewards).cpu().numpy()
+        return fcg_rewards, recall_rewards
 
     def load(self, path, override=True):
         """Return opt and model states."""

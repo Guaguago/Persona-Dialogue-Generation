@@ -207,14 +207,28 @@ class SelfPlayWorld(DialogPartnerWorld):
             # agent_b_coherent_reward = agents[1].coherent_score(first_message)
             #
             agent_a_language_reward = agents[0].language_score()
+
             min_language_reward = agent_a_language_reward.min()
             max_language_reward = agent_a_language_reward.max()
             diff_reward = max_language_reward - min_language_reward + 1e-6
             agent_a_language_reward = (agent_a_language_reward - min_language_reward) / diff_reward
             # agent_b_language_reward = agents[1].language_score()
 
-            agent_a_fcg_reward = agents[0].finding_common_ground_score(agents[1].persona_transmitter)
-            reward_a_list = cal_final_reward(agent_a_fcg_reward, agent_a_coherent_reward, agent_a_language_reward)
+            agent_a_fcg_reward, agent_a_recall_reward = agents[0].finding_common_ground_score(
+                agents[1].persona_transmitter)
+            min_fcg_reward = agent_a_fcg_reward.min()
+            max_fcg_reward = agent_a_fcg_reward.max()
+            diff_reward = max_fcg_reward - min_fcg_reward + 1e-6
+            agent_a_fcg_reward = (agent_a_fcg_reward - min_fcg_reward) / diff_reward
+            min_recall_reward = agent_a_recall_reward.min()
+            max_recall_reward = agent_a_recall_reward.max()
+            diff_reward = max_recall_reward - min_recall_reward + 1e-6
+            agent_a_recall_reward = (agent_a_recall_reward - min_recall_reward) / diff_reward
+
+            reward_a_list = cal_final_reward(fcg_score=agent_a_fcg_reward,
+                                             recall_score=agent_a_recall_reward,
+                                             coherent_score=agent_a_coherent_reward,
+                                             language_score=agent_a_language_reward)
 
             # # get batch size
             # batch_size = vt_persona_agent_a.size(0)
@@ -297,7 +311,8 @@ class SelfPlayWorld(DialogPartnerWorld):
 
             if is_display:
                 print('---------------- Reward ------------------')
-                print('finding_common_ground : {}'.format(agent_a_fcg_reward[0]))
+                print('fcg : {}'.format(agent_a_fcg_reward[0]))
+                print('recall : {}'.format(agent_a_recall_reward[0]))
                 print('coherent : {}'.format(agent_a_coherent_reward[0]))
                 print('language : {}'.format(agent_a_language_reward[0]))
                 # print('persona  : {}'.format(agent_a_persona_reward[0]))

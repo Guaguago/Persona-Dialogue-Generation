@@ -144,8 +144,8 @@ def visualize_topk_nodes_with_values(tensor, vocab, k=10, concept=False, matrix=
     return visualization
 
 
-def cal_final_reward(fcg_score, agent_a_coherent_reward, agent_a_language_reward):
-    reward_a_list = fcg_score + agent_a_coherent_reward + agent_a_language_reward
+def cal_final_reward(fcg_score, recall_score, coherent_score, language_score):
+    reward_a_list = fcg_score + recall_score + coherent_score + language_score
     reward_a_baseline = reward_a_list.mean(axis=0, keepdims=True)
     reward_a_list = reward_a_list - reward_a_baseline
     return reward_a_list
@@ -164,11 +164,11 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
 
     batch_size = len(send_messages_list[0])
     num_turn = len(send_messages_list)
-
     # calculate common ground
     # common_grounds = [[[] for _ in range(num_turn)] for _ in range(batch_size)]
     # num_common_ground_concepts = [[0 for _ in range(num_turn)] for _ in range(batch_size)]
     fcg_scores = [[0 for _ in range(num_turn)] for _ in range(batch_size)]
+    recall_scores = [[0 for _ in range(num_turn)] for _ in range(batch_size)]
     common_ground_history = [torch.zeros(2680).to(device) for _ in range(batch_size)]
     for idx_turn, receive_messages, send_messages in zip(
             reversed(range(num_turn)), reversed(receive_messages_list), reversed(send_messages_list)):
@@ -186,16 +186,17 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
 
             # num_common_ground_concepts[idx_batch][idx_turn] += common_ground.sum().item()
             precision_score = fcg_precision_score(persona_ground, common_ground, kw_graph_distance_matrix)
-            recall_score = fcg_recall_score(persona_ground, common_ground, kw_graph_distance_matrix, 0.6)
-            fcg_score = (precision_score + recall_score) / 2
-            fcg_scores[idx_batch][idx_turn] += fcg_score / (num_turn - idx_turn + 1)
+            fcg_scores[idx_batch][idx_turn] += precision_score
+
+            recall_score = fcg_recall_score(persona_ground, common_ground, kw_graph_distance_matrix, 0.5)
+            recall_scores[idx_batch][idx_turn] += recall_score / (num_turn - idx_turn + 1)
             # common_grounds[idx_batch][idx_turn] += common_ground.tolist()
 
     # common_grounds = torch.tensor(common_grounds, dtype=torch.bool).to(device)
     # num_common_ground_concepts = torch.tensor(num_common_ground_concepts).to(device)
     # concepts2persona_ground = (kw_graph_distance_matrix * persona_ground).sum(-1) / num_persona_ground_concepts
     # fcg_precision = (common_grounds * concepts2persona_ground).sum(-1) / num_common_ground_concepts
-    return fcg_scores
+    return fcg_scores, recall_scores
 
 
 def fcg_precision_score(persona_ground, common_ground, distance_matrix):
@@ -205,8 +206,7 @@ def fcg_precision_score(persona_ground, common_ground, distance_matrix):
     if score.isnan():
         score = distance_matrix['max']
     else:
-        score = distance_matrix['max'] - score.item()
-    score = score / distance_matrix['max']
+        score = - score.item()
     return score
 
 
@@ -444,8 +444,8 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, low
     return pool, probs
 
 
-def cal_lm_word_probs(logits, softmax):
-    probs = softmax(logits)
+def cal_lm_word_probs(logits, softmax, temperature=1.0):
+    probs = softmax(logits / temperature)
     return probs
 
 
