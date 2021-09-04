@@ -757,6 +757,10 @@ class Gpt2SeqModel(nn.Module):
         max_len = 512 - 1 - send_tokens.size(-1)
         cur_token_len = receive_tokens.size(-1)
 
+        if receive_tokens.size(1) != send_tokens.size(1):
+            print(receive_tokens.size())
+            print(send_tokens.size())
+
         assert receive_tokens.size(1) == send_tokens.size(1)
         if cur_token_len > max_len:
             receive_tokens = receive_tokens[:, :, cur_token_len - max_len:]

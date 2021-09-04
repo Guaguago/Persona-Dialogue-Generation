@@ -1135,8 +1135,8 @@ class PSquareAgent(Agent):
             receive_tensor = receive_tensor.cuda(cuda_device)
             send_tensor = send_tensor.cuda(cuda_device)
 
-        print('R: {}'.format(receive_tensor.size()))
-        print('S: {}'.format(send_tensor.size()))
+        receive_tensor = receive_tensor[:, 0:self.opt.get('max_turn'), :]
+        send_tensor = send_tensor[:, 0:self.opt.get('max_turn'), :]
         sorted_score = self.coherent_model.score_sentence(receive_tensor, send_tensor)
         # desorted ind
         desorted_ind = np.array(sort_ind).argsort()
