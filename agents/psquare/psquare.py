@@ -1162,11 +1162,11 @@ class PSquareAgent(Agent):
         xs, _, _, sort_ind, *_ = PaddingUtils.pad_text(obs, self.dict,
                                                        null_idx=self.dict.pad_idx,
                                                        dq=True, eval_labels=True,
+                                                       encode_truncate=self.encode_max_seq_len,
                                                        decode_truncate=self.decode_max_seq_len)
         xs = split_pad_vector(xs, self.dict.end_idx, self.dict.pad_idx)
         xs = torch.LongTensor(xs)
         cuda_device = next(self.language_model.transformer_module.parameters()).device
-
         if self.use_cuda:
             xs = xs.cuda(cuda_device)
 
@@ -1195,8 +1195,8 @@ class PSquareAgent(Agent):
                               for interaction in send_messages_list]
 
         fcg_rewards, recall_rewards = cal_finding_common_ground_score(send_messages_list, receive_messages_list,
-                                                 self.persona_transmitter, partner_persona,
-                                                 self.kw_graph_distance_matrix, self.device)
+                                                                      self.persona_transmitter, partner_persona,
+                                                                      self.kw_graph_distance_matrix, self.device)
         fcg_rewards = torch.tensor(fcg_rewards).cpu().numpy()
         recall_rewards = torch.tensor(recall_rewards).cpu().numpy()
         return fcg_rewards, recall_rewards
