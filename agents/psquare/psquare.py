@@ -195,7 +195,7 @@ class PSquareAgent(Agent):
         agent.add_argument('--share-encoder-persona-dialogue', type=bool, default=True,
                            help='share the same encoder when encoding dialogue and persona')
         agent.add_argument('--encode_max_seq_len', type=int, default=256)
-        agent.add_argument('--decode_max_seq_len', type=int, default=32)
+        agent.add_argument('--decode_max_seq_len', type=int, default=24)
         agent.add_argument('--shuffle_persona', type=bool, default=True)
 
         # receiver opt
@@ -1161,7 +1161,9 @@ class PSquareAgent(Agent):
         obs = [{'text': c} for c in batch_messages]
         xs, _, _, sort_ind, *_ = PaddingUtils.pad_text(obs, self.dict,
                                                        null_idx=self.dict.pad_idx,
-                                                       dq=False, eval_labels=True)
+                                                       dq=False, eval_labels=True,
+                                                       encode_truncate=self.encode_max_seq_len,
+                                                       decode_truncate=self.decode_max_seq_len)
         xs = split_pad_vector(xs, self.dict.end_idx, self.dict.pad_idx)
         xs = torch.LongTensor(xs)
         cuda_device = next(self.language_model.transformer_module.parameters()).device

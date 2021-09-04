@@ -33,7 +33,7 @@ def set_seed(seed=1):
 def setup_args():
     parser = setup_args_dict()
     encode_max_seq_len = 256
-    decode_max_seq_len = 32
+    decode_max_seq_len = 24
 
     if IS_ORIGINAL:
         # receiver_basic = 'receiver_revised'
