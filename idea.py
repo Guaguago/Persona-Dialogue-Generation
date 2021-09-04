@@ -280,9 +280,9 @@ def cal_context_pool(context_concepts, device, lower_bound=0):
                                          index=context_concepts, dim=-1)  # [bs, 2680]
     context_concept_pool[:, 0:2] = 0
 
-    exceed_lower_bound = (context_concept_pool.sum(-1) >= lower_bound).unsqueeze(-1)
-
-    context_concept_pool = context_concept_pool * exceed_lower_bound
+    if lower_bound is not None:
+        exceed_lower_bound = (context_concept_pool.sum(-1) >= lower_bound).unsqueeze(-1)
+        context_concept_pool = context_concept_pool * exceed_lower_bound
 
     return context_concept_pool
 
@@ -408,7 +408,7 @@ def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax
 def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, lower_bound=0, topk=None,
                      concept2words_map=None):
     probs = None
-    exceed_lower_bound = (persona_kws.sum(-1) >= lower_bound).unsqueeze(-1)
+
     # has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
     matrix = kw_graph_distance_matrix['matrix']
     max = kw_graph_distance_matrix['max']
@@ -439,7 +439,9 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, low
     # print([id2keyword[i] for i inpersona_pool.tolist()])
     # persona_pool = probs > 1e-5
 
-    pool = pool * exceed_lower_bound
+    if lower_bound is not None:
+        exceed_lower_bound = (persona_kws.sum(-1) >= lower_bound).unsqueeze(-1)
+        pool = pool * exceed_lower_bound
     # print([id2keyword[i] for i, j in enumerate(persona_pool[0].tolist()) if j == 1])
     return pool, probs
 
