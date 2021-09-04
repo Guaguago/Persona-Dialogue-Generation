@@ -27,7 +27,7 @@ class LanguageModel(object):
         golden_out = generate_tokens[:, 1:].unsqueeze(dim=2)
         # TODO: manually construct the position ids for input & output
         with torch.no_grad():
-            print(generate_tokens)
+            generate_tokens = torch.where(generate_tokens.eq(40483), 0, generate_tokens)
             lm_logits, all_states = self.transformer_module(generate_tokens)
             # lm labels should mask the source sentence language model
             shift_logits = lm_logits[..., :-1, :].contiguous()
