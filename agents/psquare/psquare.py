@@ -1161,8 +1161,7 @@ class PSquareAgent(Agent):
         obs = [{'text': c} for c in batch_messages]
         xs, _, _, sort_ind, *_ = PaddingUtils.pad_text(obs, self.dict,
                                                        null_idx=self.dict.pad_idx,
-                                                       dq=False, eval_labels=True,
-                                                       encode_truncate=20)
+                                                       dq=False, eval_labels=True)
         xs = split_pad_vector(xs, self.dict.end_idx, self.dict.pad_idx)
         xs = torch.LongTensor(xs)
         cuda_device = next(self.language_model.transformer_module.parameters()).device
