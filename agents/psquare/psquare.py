@@ -195,7 +195,7 @@ class PSquareAgent(Agent):
         agent.add_argument('--share-encoder-persona-dialogue', type=bool, default=True,
                            help='share the same encoder when encoding dialogue and persona')
         agent.add_argument('--encode_max_seq_len', type=int, default=256)
-        agent.add_argument('--decode_max_seq_len', type=int, default=24)
+        agent.add_argument('--decode_max_seq_len', type=int, default=32)
         agent.add_argument('--shuffle_persona', type=bool, default=True)
 
         # receiver opt
