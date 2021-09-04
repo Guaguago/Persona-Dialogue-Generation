@@ -1123,6 +1123,7 @@ class PSquareAgent(Agent):
         receive_tensor, send_tensor, _, sort_ind, *_ = PaddingUtils.pad_text(batch_obs, self.dict,
                                                                              null_idx=self.dict.pad_idx,
                                                                              dq=False, eval_labels=True)
+        print('Before: {}, {}'.format(receive_tensor.size(), send_tensor.size()))
         # batch_size x turn_size x max_seq_len
         receive_tensor = split_pad_vector(receive_tensor, self.dict.end_idx, self.dict.pad_idx)
         receive_tensor = torch.LongTensor(receive_tensor)
@@ -1134,7 +1135,7 @@ class PSquareAgent(Agent):
         if self.use_cuda:
             receive_tensor = receive_tensor.cuda(cuda_device)
             send_tensor = send_tensor.cuda(cuda_device)
-
+        print('After: {}, {}'.format(receive_tensor.size(), send_tensor.size()))
         sorted_score = self.coherent_model.score_sentence(receive_tensor, send_tensor)
         # desorted ind
         desorted_ind = np.array(sort_ind).argsort()
