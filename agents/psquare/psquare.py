@@ -1139,6 +1139,8 @@ class PSquareAgent(Agent):
             print('【receive_tensor size】{}'.format(receive_tensor.size()))
             print('【send_tensor size】{}'.format(send_tensor.size()))
             print('【send_tensor】\n{}'.format(send_tensor))
+            send_tensor = send_tensor.view(6, -1)[send_tensor.view(6, -1).sum(-1).ne(0)].view(2, 3, -1)
+            print('【send_tensor after】\n{}'.format(send_tensor))
 
         receive_tensor = receive_tensor[:, 0:self.opt.get('max_turn'), :]
         send_tensor = send_tensor[:, 0:self.opt.get('max_turn'), :]
