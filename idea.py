@@ -287,7 +287,8 @@ def cal_context_pool(context_concepts, device, lower_bound=0):
     return context_concept_pool
 
 
-def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, softmax, use_min=False):
+def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, softmax, use_min=False,
+                        concept2words_map=None):
     batch_size = context_pool.size(0)
     matrix = distance_matrix['matrix']
     max = distance_matrix['max']
@@ -317,6 +318,9 @@ def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, sof
 
     # No concepts then this pool = 1
     to_persona_pool = to_persona_pool * has_concept + (1 - has_concept)
+    # 去掉 word vocab 没有的
+    to_persona_pool = to_persona_pool * concept2words_map.sum(-1).ne(0)
+
     return to_persona_pool
 
 
@@ -368,7 +372,8 @@ def cal_final_pool(opt, context_concepts, persona_kw_mask, kw_graph_distance_mat
         to_persona_pool = cal_to_persona_pool(distance_matrix=kw_graph_distance_matrix,
                                               context_pool=context_pool,
                                               persona_concept_mask=persona_kw_mask,
-                                              softmax=softmax)
+                                              softmax=softmax,
+                                              concept2words_map=concept2words_map)
         final_pool = (final_pool + to_persona_pool).clamp(0, 1)
 
     if use_context_pool:
