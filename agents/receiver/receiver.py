@@ -89,6 +89,46 @@ def split_pad_vector(xs, separator, null_idx):
     return xs
 
 
+def split_pad_vector_for_bug(xs, separator, null_idx):
+    """
+    Use the splitor to split the sentences.
+
+    spliter is the value that represents END TOKEN
+    :param x: input
+    :param separator: the required seperator
+    :return: a list of dialogs after splitting and padding
+    """
+
+    def split(x):
+        _xs = []
+        temp_x = []
+        for _x in x:
+            if _x == separator and temp_x[-1] == 40484:
+                _xs.append(temp_x)
+                temp_x = []
+                continue
+            if _x != null_idx:
+                temp_x.append(_x)
+        if len(temp_x):
+            _xs.append(temp_x)
+        return _xs
+
+    def get_max_words_size(_xs):
+        max_size = 0
+        for agent in _xs:
+            for dialog in agent:
+                if len(dialog) > max_size:
+                    max_size = len(dialog)
+        return max_size
+
+    xs = [split(x) for x in xs]
+    max_turn_size = max((len(x) for x in xs))
+    max_words_size = get_max_words_size(xs)
+    for agent in xs:
+        padding(agent, max_turn_size, max_words_size, null_idx)
+    return xs
+
+
 class ReceiverAgent(Agent):
     OPTIM_OPTS = {
         'adadelta': optim.Adadelta,

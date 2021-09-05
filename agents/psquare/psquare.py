@@ -14,7 +14,7 @@ from agents.transmitter.transmitter import GPTDictionaryAgent, Gpt2SeqModel
 from agents.transmitter.utils import maintain_dialog_history, PaddingUtils, round_sigfigs
 from agents.transmitter.seq2seq.model import Seq2seqModel
 from torch.optim import SGD, lr_scheduler, Adagrad
-from agents.receiver.receiver import ReceiverEncoder, split_pad_vector
+from agents.receiver.receiver import ReceiverEncoder, split_pad_vector, split_pad_vector_for_bug
 from agents.psquare.utils import prepare_for_understand
 from agents.common.dict_helper import SpecialToken
 from agents.transmitter.gpt.loss import TokenCrossEntropyLoss
@@ -1130,7 +1130,7 @@ class PSquareAgent(Agent):
         receive_tensor = split_pad_vector(receive_tensor, self.dict.end_idx, self.dict.pad_idx)
         receive_tensor = torch.LongTensor(receive_tensor)
         # batch_size x turn_size x max_seq_len
-        send_tensor = split_pad_vector(send_tensor, self.dict.start_idx, self.dict.pad_idx)
+        send_tensor = split_pad_vector_for_bug(send_tensor, self.dict.start_idx, self.dict.pad_idx)
         send_tensor = torch.LongTensor(send_tensor)
         cuda_device = next(self.coherent_model.parameters()).device
 
