@@ -99,6 +99,7 @@ def split_pad_vector_for_bug(xs, separator, null_idx):
     :return: a list of dialogs after splitting and padding
     """
 
+    # coherent send
     def split_40483(x):
         _xs = []
         temp_x = []
@@ -114,11 +115,12 @@ def split_pad_vector_for_bug(xs, separator, null_idx):
             _xs.append(temp_x)
         return _xs
 
+    # language model send
     def split_40484(x):
         _xs = []
         temp_x = []
         for _x in x:
-            if _x == 40483:
+            if _x in [40483, 40478, 40479]:
                 continue
             if _x == separator:
                 _xs.append(temp_x)
