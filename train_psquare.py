@@ -95,16 +95,17 @@ def setup_args():
         init_model_coherent='{}/transmitter/{}.model'.format(MODEL_DIR, transmitter_basic),
         # validation configuration
         validation_max_exs=validation_max,  # -1
-        validation_every_n_secs=3600,  # 90
+        validation_every_n_secs=2400,  # 90
         train_display_every_n_secs=train_display,
         validation_metric='f1',
         validation_metric_mode='max',
-        validation_patience=10,
+        validation_patience=5,
         log_every_n_secs=30,
         # logging configuration
         display_examples=False,
         tensorboard_log=True,
         tensorboard_tag='exp',
+        report_freq=0.025,
         train_report_metrics='num_selfplay_turns,num_selfplay_episode,total_reward,reward,reward_var',
         tensorboard_metrics='ppl,reward,total_reward,f1,hits@1,reward_var,bleu'
     )
