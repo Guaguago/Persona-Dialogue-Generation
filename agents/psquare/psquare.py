@@ -1123,6 +1123,9 @@ class PSquareAgent(Agent):
         receive_tensor, send_tensor, _, sort_ind, *_ = PaddingUtils.pad_text(batch_obs, self.dict,
                                                                              null_idx=self.dict.pad_idx,
                                                                              dq=False, eval_labels=True)
+
+        debug_1 = send_tensor
+
         # batch_size x turn_size x max_seq_len
         receive_tensor = split_pad_vector(receive_tensor, self.dict.end_idx, self.dict.pad_idx)
         receive_tensor = torch.LongTensor(receive_tensor)
@@ -1136,6 +1139,10 @@ class PSquareAgent(Agent):
             send_tensor = send_tensor.cuda(cuda_device)
 
         if receive_tensor.size(1) != send_tensor.size(1):
+            print('< debug 1 >')
+            [print(i) for i in debug_1]
+
+            print('< debug 2 >')
             print('【receive_tensor size】{}'.format(receive_tensor.size()))
             print('【send_tensor size】{}'.format(send_tensor.size()))
             print('【send_tensor】\n{}'.format(send_tensor))
