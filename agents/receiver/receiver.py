@@ -99,11 +99,28 @@ def split_pad_vector_for_bug(xs, separator, null_idx):
     :return: a list of dialogs after splitting and padding
     """
 
-    def split(x):
+    def split_40483(x):
         _xs = []
         temp_x = []
         for _x in x:
-            if _x == separator and temp_x[-1] == 40484:
+            if _x == 40483:
+                if temp_x[-1] == 40484:
+                    _xs.append(temp_x)
+                    temp_x = []
+                continue
+            if _x != null_idx:
+                temp_x.append(_x)
+        if len(temp_x):
+            _xs.append(temp_x)
+        return _xs
+
+    def split_40484(x):
+        _xs = []
+        temp_x = []
+        for _x in x:
+            if _x == 40483:
+                continue
+            if _x == separator:
                 _xs.append(temp_x)
                 temp_x = []
                 continue
@@ -121,7 +138,10 @@ def split_pad_vector_for_bug(xs, separator, null_idx):
                     max_size = len(dialog)
         return max_size
 
-    xs = [split(x) for x in xs]
+    if 40483 == separator:
+        xs = [split_40483(x) for x in xs]
+    else:
+        xs = [split_40484(x) for x in xs]
     max_turn_size = max((len(x) for x in xs))
     max_words_size = get_max_words_size(xs)
     for agent in xs:
