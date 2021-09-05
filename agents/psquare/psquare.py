@@ -1179,6 +1179,9 @@ class PSquareAgent(Agent):
         xs, _, _, sort_ind, *_ = PaddingUtils.pad_text(obs, self.dict,
                                                        null_idx=self.dict.pad_idx,
                                                        dq=False, eval_labels=True)
+
+        debug_xs = xs
+
         xs = split_pad_vector_for_bug(xs, self.dict.end_idx, self.dict.pad_idx)
         xs = torch.LongTensor(xs)
         cuda_device = next(self.language_model.transformer_module.parameters()).device
@@ -1186,14 +1189,21 @@ class PSquareAgent(Agent):
             xs = xs.cuda(cuda_device)
 
         # print('【normal shape】 {}'.format(xs.size()))
-
+        assert 3==xs.size(1)
         try:
             sorted_score = self.language_model.score_sentence(xs)
         except RuntimeError as e:
+            print('【debug-1】')
+            [print(i) for i in debug_xs]
+            print('【debug-2】')
+            [print(i) for i in xs.view(-1, xs.size(2)).tolist()]
+            print('input: {}'.format(xs))
             print(e)
             print('shape: {}'.format(xs.size()))
             print('input: {}'.format(xs))
             print('input: {}'.format(xs[0]))
+
+
         # desorted ind
         desorted_ind = np.array(sort_ind).argsort()
         scores = sorted_score[desorted_ind]
