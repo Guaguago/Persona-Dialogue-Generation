@@ -120,7 +120,7 @@ def split_pad_vector_for_bug(xs, separator, null_idx):
         _xs = []
         temp_x = []
         for _x in x:
-            if _x in [40483, 40478, 40479, 40480]:
+            if _x in [40483, 40478, 40479, 40480, 40481]:
                 continue
             if _x == separator:
                 _xs.append(temp_x)
