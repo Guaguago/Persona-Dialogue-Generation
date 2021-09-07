@@ -200,6 +200,8 @@ class SelfPlayWorld(DialogPartnerWorld):
             # # receive message and send message are as attribute of the agent
             # # therefore we here only pass-by the first message
             agent_a_coherent_reward = agents[0].coherent_score(first_message)
+            agent_b_coherent_reward = agents[1].coherent_score(None)
+            agent_a_coherent_reward = (agent_a_coherent_reward + agent_b_coherent_reward) / 2
             min_coherent_reward = agent_a_coherent_reward.min()
             max_coherent_reward = agent_a_coherent_reward.max()
             diff_reward = max_coherent_reward - min_coherent_reward + 1e-6
@@ -225,10 +227,12 @@ class SelfPlayWorld(DialogPartnerWorld):
             diff_reward = max_recall_reward - min_recall_reward + 1e-6
             agent_a_recall_reward = (agent_a_recall_reward - min_recall_reward) / diff_reward
 
+            weights = self.opt.get('weights')
             reward_a_list = cal_final_reward(fcg_score=agent_a_fcg_reward,
                                              recall_score=agent_a_recall_reward,
                                              coherent_score=agent_a_coherent_reward,
-                                             language_score=agent_a_language_reward)
+                                             language_score=agent_a_language_reward,
+                                             weights=weights)
 
             # # get batch size
             # batch_size = vt_persona_agent_a.size(0)

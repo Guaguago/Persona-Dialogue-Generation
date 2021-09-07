@@ -53,6 +53,7 @@ def setup_args():
     # exp_name = 'DEBUG'
     parser.set_defaults(
         # idea add ================
+        weights=[FCG, RECALL, COHE, LM],
         # =======================
         download_path='{}/downloads'.format(DATA_DIR),
         datapath=DATA_DIR,

@@ -144,8 +144,11 @@ def visualize_topk_nodes_with_values(tensor, vocab, k=10, concept=False, matrix=
     return visualization
 
 
-def cal_final_reward(fcg_score, recall_score, coherent_score, language_score):
-    reward_a_list = fcg_score + recall_score + coherent_score + language_score
+def cal_final_reward(fcg_score, recall_score, coherent_score, language_score, weights):
+    reward_a_list = weights[0] * fcg_score + \
+                    weights[1] * recall_score + \
+                    weights[2] * coherent_score + \
+                    weights[3] * language_score
     reward_a_baseline = reward_a_list.mean(axis=0, keepdims=True)
     reward_a_list = reward_a_list - reward_a_baseline
     return reward_a_list
