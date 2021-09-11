@@ -1,6 +1,5 @@
 from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
-NAME = "pegg-o"
 IS_ORIGINAL = True
 MIDDLE_POOL_SIZE = 100
 NEXT_POOL_SIZE = None
@@ -12,7 +11,8 @@ PERSONA_LOWER_BOUND = 0
 CONTEXT_LOWER_BOUND = 0
 BEAM_SIZE = 2
 
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-18'
+
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-42/psquare/rl-o-7.model'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 
@@ -26,9 +26,9 @@ def setup_task():
 
 def setup_trained_weights():
     if IS_ORIGINAL:
-        weights_name = '{}/transmitter/{}.model'.format(MODEL_DIR, NAME)
+        weights_name = '{}'.format(MODEL_DIR)
     else:
-        weights_name = '{}/transmitter/{}.model'.format(MODEL_DIR, NAME)
+        weights_name = '{}'.format(MODEL_DIR)
     return weights_name
 
 
@@ -55,20 +55,12 @@ if __name__ == '__main__':
     model_name = setup_trained_weights()
     parser.set_params(
         datapath=DATA_DIR,
-        model_file='{}/transmitter/{}.model'.format(MODEL_DIR, NAME),
+        model_file='{}'.format(MODEL_DIR),
         model='agents.transmitter.transmitter:TransformerAgent',
         init_model_transmitter=model_name,
         gpu=0,
         batchsize=16,
         beam_size=2,
-        persona_pool_r=PERSONA_POOL_R,
-        middle_pool_size=MIDDLE_POOL_SIZE,
-        next_pool_size=NEXT_POOL_SIZE,
-        use_context_pool=USE_CONTEXT_POOL,
-        use_to_persona_pool=USE_TO_PERSONA_POOL,
-        drop_literal_persona=DROP_LITERAL_PERSONA,
-        persona_lower_bound=PERSONA_LOWER_BOUND,
-        context_lower_bound=CONTEXT_LOWER_BOUND,
         rank_candidates=True,
         report_freq=0.0001,
     )
