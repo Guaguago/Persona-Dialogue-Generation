@@ -27,7 +27,7 @@ def prepare_example_persona_kws(history, persona_str):
     if history and 'persona_kws' in history:
         return history['persona_kws']
     else:
-        return extract_keywords(persona_str, 30)
+        return extract_concepts(persona_str, 30)
 
 
 def prepare_batch_persona_kw_mask(obs, device):
@@ -38,7 +38,7 @@ def prepare_batch_persona_kw_mask(obs, device):
     return batch_persona_kws_mask
 
 
-def get_kw_graph_distance_matrix(path, device):
+def get_transition_matrix(path, device):
     MAX = 100
     kw_graph_distance_matrix = torch.ones((len(keyword2id), len(keyword2id))).to(device) * -1
     kw_graph_distance_dict = load_pickle(path)
@@ -158,7 +158,7 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
                                     trainer_persona, partner_persona, kw_graph_distance_matrix, device):
     # calulate persona ground
     both_persona_str = trainer_persona + ' ' + partner_persona
-    persona_concepts = extract_keywords(both_persona_str, 50)
+    persona_concepts = extract_concepts(both_persona_str, 50)
     persona_ground = torch.scatter(input=torch.zeros(2680).to(device), dim=-1,
                                    index=torch.tensor(persona_concepts).to(device),
                                    src=torch.ones_like(torch.tensor(persona_concepts, dtype=torch.float).to(device)))
@@ -176,7 +176,7 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
     for idx_turn, receive_messages, send_messages in zip(
             reversed(range(num_turn)), reversed(receive_messages_list), reversed(send_messages_list)):
         for idx_batch, receive_message, send_message in zip(range(batch_size), receive_messages, send_messages):
-            concepts = extract_keywords(send_message + ' ' + receive_message, 50)
+            concepts = extract_concepts(send_message + ' ' + receive_message, 50)
             common_ground_current = torch.scatter(input=torch.zeros(2680).to(device), dim=-1,
                                                   index=torch.tensor(concepts).to(device),
                                                   src=torch.ones_like(
@@ -592,12 +592,16 @@ def cal_word2concept_map(dict, device):
     count = 0
     for idx in keys:
         word = tokenizer.decode([idx])
-        basic_form_word = kw_format([word])[0]
-        if basic_form_word in keyword2id:
-            map[idx] = keyword2id[basic_form_word]
+        if word in keyword2id:
+            map[idx] = keyword2id[word]
             count += 1
         else:
-            map[idx] = 0
+            basic_form_word = kw_format([word])[0]
+            if basic_form_word in keyword2id:
+                map[idx] = keyword2id[basic_form_word]
+                count += 1
+            else:
+                map[idx] = 0
     return torch.tensor(map).to(device)
 
 
@@ -638,8 +642,8 @@ def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
 ## one example for kw model
 def prepare_example_for_kw_model(history, text, dict):
     context, last_two_utters = process_context(history, text, dict)
-    last_two_utters_keywords = extract_keywords(context, 20)
-    last_two_utters_concepts = extract_concepts(context, node2id, 30, dict)
+    last_two_utters_keywords = extract_concepts(context, 20)
+    last_two_utters_concepts = extract_concepts_grams(context, node2id, 30, dict)
     return last_two_utters, last_two_utters_keywords, last_two_utters_concepts
 
 
@@ -734,14 +738,29 @@ def process_context(history, text, dict):
     return context, [minus_two, minus_one]
 
 
-def extract_keywords(context, max_sent_len):
-    simple_tokens = kw_tokenize(context)
-    utter_keywords = [keyword2id[w] for w in simple_tokens if w in keyword2id]
-    utter_keywords = pad_sentence(utter_keywords, max_sent_len, keyword2id["<pad>"])
-    return utter_keywords
+def extract_concepts(context, max_sent_len):
+    rest = []
+    concept_id = []
+    tokenized = concept_tokenize(context)
+
+    for w in tokenized:
+        if w in keyword2id:
+            concept_id.append(keyword2id[w])
+            continue
+        rest.append(w)
+
+    basic = concept_to_basic(rest)
+
+    for w in basic:
+        if w in keyword2id:
+            concept_id.append(keyword2id[w])
+
+    concept_id = pad_sentence(concept_id, max_sent_len, keyword2id["<pad>"])
+
+    return concept_id
 
 
-def extract_concepts(context, node2id, max_sent_len, dict):
+def extract_concepts_grams(context, node2id, max_sent_len, dict):
     context = dict.split_tokenize(context)
     utter_concepts = []
     all_utter_ngrams = []
@@ -765,6 +784,14 @@ def pad_sentence(sent, max_sent_len, pad_token):
 
 def kw_tokenize(string):
     return tokenize(string, [nltk_tokenize, lower, pos_tag, to_basic_form])
+
+
+def concept_tokenize(string):
+    return tokenize(string, [nltk_tokenize, lower])
+
+
+def concept_to_basic(string):
+    return tokenize(string, [pos_tag, to_basic_form])
 
 
 def kw_format(string):
