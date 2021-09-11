@@ -1,15 +1,7 @@
 from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
 IS_ORIGINAL = True
-MIDDLE_POOL_SIZE = 100
-NEXT_POOL_SIZE = None
-PERSONA_POOL_R = None
-USE_TO_PERSONA_POOL = False
-USE_CONTEXT_POOL = False
-DROP_LITERAL_PERSONA = False
-PERSONA_LOWER_BOUND = 0
-CONTEXT_LOWER_BOUND = 0
-BEAM_SIZE = 2
+
 
 
 MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-42/psquare/rl-o-7.model'
