@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
 import os
+
 from idea import load_kw_model, cal_concept_word_probs, cal_hybrid_word_probs, id2keyword, cal_lm_word_probs, \
     cal_concept_word_probs_attention
 
@@ -32,6 +33,7 @@ class Gpt2SeqModel(nn.Module):
         # regard input and output as one sentence, given the input as context, generate the next sentence.
         self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', cache_dir=cache_model_dir,
                                                                        num_special_tokens=special_token_len)
+
         # idea interface
         self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
         self.gate_linear = nn.Linear(768, 1, bias=False)
@@ -87,6 +89,8 @@ class Gpt2SeqModel(nn.Module):
         # whether training or evaluation
         if tgt_seq is not None:
             input_seq = torch.cat([src_seq, start_tensor, tgt_seq], dim=1)
+            input_seq_CLM = torch.cat([start_tensor, tgt_seq], dim=1)
+
             # TODO: manually construct the position ids for input & output
             if self.use_dis and src_seq_dis is not None:
                 # create numpy
@@ -118,8 +122,11 @@ class Gpt2SeqModel(nn.Module):
                     final_pool=final_pool, softmax=self.softmax,
                     concept2words_map=concept2words_map)
             else:
+                clm_logits, clm_hidden_states = self.transformer_module(input_seq_CLM)
+                clm_logits = clm_logits[:, :-1, :]
+                assert clm_logits.size() == shift_logits.size()
                 concept_word_probs = cal_concept_word_probs(
-                    logits=shift_logits,
+                    logits=clm_logits,
                     final_pool=final_pool,
                     concept2words_map=concept2words_map,
                     softmax=self.softmax)
@@ -554,11 +561,13 @@ class Gpt2SeqModel(nn.Module):
         with torch.no_grad():
             # initialize presents
             start_token_tensor = prior_context.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+            start_token_tensor_CLM = prior_context[:, -1:].repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             # jump_probs = jump_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             # walk_probs = walk_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             final_pool = final_pool.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
 
             token_tensor = start_token_tensor
+            token_tensor_CLM = start_token_tensor_CLM
             for step in range(self.longest_label):
                 outputs, hidden_states = self.transformer_module.forward(token_tensor)
                 logits = outputs[:, -1, :]
@@ -572,8 +581,12 @@ class Gpt2SeqModel(nn.Module):
                         final_pool=final_pool, softmax=self.softmax,
                         concept2words_map=concept2words_map)
                 else:
+                    clm_logits, clm_hidden_states = self.transformer_module(token_tensor_CLM)
+                    clm_logits = clm_logits[:, -1, :]
+                    assert clm_logits.size() == logits.size()
+
                     concept_word_probs = cal_concept_word_probs(
-                        logits=logits.unsqueeze(1),
+                        logits=clm_logits.unsqueeze(1),
                         final_pool=final_pool,
                         concept2words_map=concept2words_map,
                         softmax=self.softmax)
@@ -683,6 +696,7 @@ class Gpt2SeqModel(nn.Module):
                 beam_scores *= penalty
                 current_sample_prob *= self.annealing
                 token_tensor = torch.cat([start_token_tensor, prevs], dim=1)
+                token_tensor_CLM = torch.cat([start_token_tensor_CLM, prevs], dim=1)
 
             predicts = []
             result = prevs.view(batch_size, self.beam_size, -1)
