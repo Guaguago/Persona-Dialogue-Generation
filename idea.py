@@ -429,7 +429,7 @@ def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, low
     logits = max - to_persona_matrix.min(dim=-1)[0]
 
     if r is not None:
-        pool = (to_persona_matrix.min(dim=-1)[0] < 0.2) + 0.
+        pool = (to_persona_matrix.min(dim=-1)[0] < r) + 0.
     else:
         # 去掉 GPT 词典中没有的 concept for attention calculation
         logits = logits * concept2words_map.sum(-1).ne(0)

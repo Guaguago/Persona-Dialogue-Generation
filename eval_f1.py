@@ -1,7 +1,7 @@
 from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
 IS_ORIGINAL = True
-
+PERSONA_POOL_R = 6.0
 
 def setup_task():
     if IS_ORIGINAL:
@@ -47,6 +47,7 @@ if __name__ == '__main__':
         gpu=0,
         batchsize=10,
         beam_size=2,
+        persona_pool_r=PERSONA_POOL_R,
         display_examples=False
     )
     opt = parser.parse_args(print_args=False)
