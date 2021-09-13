@@ -47,7 +47,7 @@ if __name__ == '__main__':
         gpu=0,
         batchsize=10,
         beam_size=2,
-        display_examples=True
+        display_examples=False
     )
     opt = parser.parse_args(print_args=False)
     eval_f1(opt, print_parser=parser)
