@@ -746,8 +746,7 @@ class TransformerAgent(Agent):
                                          concept2words_map=self.concept2words_map,
                                          final_pool=final_pool,
                                          visualization=visualization,
-                                         use_attention=use_attention,
-                                         CLM=self.CLM)
+                                         use_attention=use_attention)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 
