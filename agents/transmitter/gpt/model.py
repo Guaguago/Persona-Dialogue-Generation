@@ -34,6 +34,8 @@ class Gpt2SeqModel(nn.Module):
         self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', cache_dir=cache_model_dir,
                                                                        num_special_tokens=special_token_len)
 
+        self.CLM = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', num_special_tokens=special_token_len)
+
         # idea interface
         self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
         self.gate_linear = nn.Linear(768, 1, bias=False)
@@ -122,7 +124,7 @@ class Gpt2SeqModel(nn.Module):
                     final_pool=final_pool, softmax=self.softmax,
                     concept2words_map=concept2words_map)
             else:
-                clm_logits, clm_hidden_states = self.transformer_module(input_seq_CLM)
+                clm_logits, clm_hidden_states = self.CLM(input_seq_CLM)
                 clm_logits = clm_logits[:, :-1, :]
                 assert clm_logits.size() == shift_logits.size()
                 concept_word_probs = cal_concept_word_probs(
@@ -561,7 +563,8 @@ class Gpt2SeqModel(nn.Module):
         with torch.no_grad():
             # initialize presents
             start_token_tensor = prior_context.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
-            start_token_tensor_CLM = prior_context[:, -1:].repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
+            start_token_tensor_CLM = prior_context[:, -1:].repeat(1, self.beam_size).view(batch_size * self.beam_size,
+                                                                                          -1)
             # jump_probs = jump_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             # walk_probs = walk_probs.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
             final_pool = final_pool.repeat(1, self.beam_size).view(batch_size * self.beam_size, -1)
@@ -581,7 +584,7 @@ class Gpt2SeqModel(nn.Module):
                         final_pool=final_pool, softmax=self.softmax,
                         concept2words_map=concept2words_map)
                 else:
-                    clm_logits, clm_hidden_states = self.transformer_module(token_tensor_CLM)
+                    clm_logits, clm_hidden_states = self.CLM(token_tensor_CLM)
                     clm_logits = clm_logits[:, -1, :]
                     assert clm_logits.size() == logits.size()
 
