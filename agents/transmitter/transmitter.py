@@ -382,9 +382,6 @@ class TransformerAgent(Agent):
                                           longest_label=states.get('longest_label', 1),
                                           device=self.device)
 
-                self.CLM = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', num_special_tokens=38)
-
-
             if opt.get('display_model', False):
                 print_model(self.model)
 
@@ -443,7 +440,6 @@ class TransformerAgent(Agent):
 
             if self.use_cuda:
                 self.model.cuda()
-                self.CLM.cuda('cuda:1')
 
             # if select persona
             if opt['select_persona']:
