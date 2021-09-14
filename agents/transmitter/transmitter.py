@@ -35,6 +35,7 @@ from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_b
 from idea import get_keyword_mask_matrix, get_transition_matrix
 from idea import cal_kw_logits, cal_next_pool, cal_persona_pool
 from idea import prepare_example_persona_kws, prepare_batch_persona_kw_mask
+from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
@@ -381,6 +382,9 @@ class TransformerAgent(Agent):
                                           longest_label=states.get('longest_label', 1),
                                           device=self.device)
 
+                self.CLM = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', num_special_tokens=38)
+
+
             if opt.get('display_model', False):
                 print_model(self.model)
 
@@ -439,6 +443,7 @@ class TransformerAgent(Agent):
 
             if self.use_cuda:
                 self.model.cuda()
+                self.CLM.cuda('cuda:1')
 
             # if select persona
             if opt['select_persona']:
@@ -745,7 +750,8 @@ class TransformerAgent(Agent):
                                          concept2words_map=self.concept2words_map,
                                          final_pool=final_pool,
                                          visualization=visualization,
-                                         use_attention=use_attention)
+                                         use_attention=use_attention,
+                                         CLM=self.CLM)
                 # generated response return gate which obtains by gate_linear, gate used to cal loss.
                 _preds, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
 

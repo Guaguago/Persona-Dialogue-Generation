@@ -34,7 +34,6 @@ class Gpt2SeqModel(nn.Module):
         self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', cache_dir=cache_model_dir,
                                                                        num_special_tokens=special_token_len)
 
-        self.CLM = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', num_special_tokens=special_token_len)
 
         # idea interface
         self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
@@ -72,7 +71,7 @@ class Gpt2SeqModel(nn.Module):
     def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
                 valid_cands=None, prev_enc=None, rank_during_training=False, sampling=False, sampling_cands=None,
                 walk_probs=None, jump_probs=None, word2concept_map=None, concept2words_map=None, lm_mask=None,
-                hybrid_weights=None, visualization=False, final_pool=None, use_attention=False):
+                hybrid_weights=None, visualization=False, final_pool=None, use_attention=False, CLM=None):
         # concat src_seq and tgt_seq as one sentence, use start token to separate them.
         if tgt_seq is not None:
             # keep track of longest label we've ever seen
@@ -124,7 +123,7 @@ class Gpt2SeqModel(nn.Module):
                     final_pool=final_pool, softmax=self.softmax,
                     concept2words_map=concept2words_map)
             else:
-                clm_logits, clm_hidden_states = self.CLM(input_seq_CLM)
+                clm_logits, clm_hidden_states = CLM(input_seq_CLM)
                 clm_logits = clm_logits[:, :-1, :]
                 assert clm_logits.size() == shift_logits.size()
                 concept_word_probs = cal_concept_word_probs(
