@@ -38,7 +38,6 @@ class Gpt2SeqModel(nn.Module):
         self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
         self.gate_linear_hidden = nn.Linear(768, 1, bias=True)
         self.gate_linear_concept = nn.Linear(768, 1, bias=True)
-        self.walk_or_jump_gate_linear = nn.Linear(768, 1, bias=False)
         self.softmax = nn.Softmax(dim=-1)
         self.sigmoid = nn.Sigmoid()
 
@@ -171,14 +170,18 @@ class Gpt2SeqModel(nn.Module):
                                                                                      walk_probs, jump_probs,
                                                                                      concept2words_map=concept2words_map,
                                                                                      final_pool=final_pool)
-                gate = self.sigmoid(self.gate_linear(hidden_states))
+                # gate = self.sigmoid(self.gate_linear_hidden(hidden_states))
+                gate = None
+
 
             elif self.training:  # FCG Bot B
                 predictions, hybrid_word_probs, hidden_states = self.train_greedy_decoding(batch_size, prior_context,
                                                                                            prior_dis,
                                                                                            concept2words_map=concept2words_map,
                                                                                            final_pool=final_pool)
-                gate = self.sigmoid(self.gate_linear(hidden_states))
+                # gate = self.sigmoid(self.gate_linear_hidden(hidden_states))
+                gate = None
+
 
             elif self.beam_size > 1:
                 # idea interface: modified
@@ -188,7 +191,8 @@ class Gpt2SeqModel(nn.Module):
                                                                                       1.0, visualization,
                                                                                       final_pool=final_pool,
                                                                                       use_attention=use_attention)
-                gate = self.sigmoid(self.gate_linear(hidden_states))
+                # gate = self.sigmoid(self.gate_linear_hidden(hidden_states))
+                gate = None
 
 
             else:  # hits@1
@@ -198,7 +202,8 @@ class Gpt2SeqModel(nn.Module):
                                                                                           concept2words_map,
                                                                                           visualization,
                                                                                           final_pool=final_pool)
-                gate = self.sigmoid(self.gate_linear(hidden_states))
+                # gate = self.sigmoid(self.gate_linear_hidden(hidden_states))
+                gate = None
 
             positive_score = self.linear(hidden_states[:, -1, :])
 
@@ -242,7 +247,7 @@ class Gpt2SeqModel(nn.Module):
                                                                     final_pool=final_pool,
                                                                     concept2words_map=concept2words_map,
                                                                     softmax=self.softmax)
-                        gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
+                        gate = self.sigmoid(self.gate_linear_hidden(hidden_states[..., src_seq_len:-1, :]))
                         hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask=None)
 
                         hybrid_word_probs = hybrid_word_probs.clamp(min=1e-6)
@@ -292,7 +297,7 @@ class Gpt2SeqModel(nn.Module):
                 # log_probs = F.log_softmax(logits, dim=-1)
 
                 ### idea interface ###
-                gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
+                gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :]))
                 lm_word_probs = cal_lm_word_probs(logits=last_logits.unsqueeze(1), softmax=self.softmax)
                 concept_word_probs = cal_concept_word_probs(logits=last_logits.unsqueeze(1),
                                                             final_pool=final_pool,
@@ -374,7 +379,7 @@ class Gpt2SeqModel(nn.Module):
             logits = logits[:, -1, :] / self.temperature
 
             lm_word_probs = cal_lm_word_probs(logits=logits.unsqueeze(1), softmax=self.softmax)
-            gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :]))
+            gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :]))
 
             concept_word_probs = cal_concept_word_probs(logits=logits.unsqueeze(1),
                                                         final_pool=final_pool,
@@ -474,7 +479,7 @@ class Gpt2SeqModel(nn.Module):
             #     final_pool=final_pool, softmax=self.softmax,
             #     concept2words_map=concept2words_map)
 
-            gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :])).unsqueeze(1)
+            gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :])).unsqueeze(1)
             hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs=lm_word_probs,
                                                       concept_word_probs=concept_word_probs,
                                                       gate=gate, lm_mask=None).squeeze(1)
@@ -534,7 +539,7 @@ class Gpt2SeqModel(nn.Module):
                                                     concept2words_map=concept2words_map,
                                                     softmax=self.softmax)
 
-        gate = self.sigmoid(self.gate_linear(last_hiddens))
+        gate = self.sigmoid(self.gate_linear_hidden(last_hiddens))
         hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs=lm_word_probs,
                                                   concept_word_probs=concept_word_probs,
                                                   gate=gate, lm_mask=None)
@@ -736,20 +741,24 @@ class Gpt2SeqModel(nn.Module):
                     lm_word_probs = cal_lm_word_probs(logits=best_logits.unsqueeze(0), softmax=self.softmax)
 
                     if use_attention:
-                        concept_word_probs = cal_concept_word_probs_attention(
+                        concept_word_probs, concept_word_embed = cal_concept_word_probs_attention(
                             embed=self.transformer_module.transformer.tokens_embed.weight,
                             hidden=best_hidden_states.unsqueeze(0),
                             lm_word_probs=lm_word_probs,
                             final_pool=best_final_pool, softmax=self.softmax,
                             concept2words_map=concept2words_map)
+
+                        gate = self.sigmoid(self.gate_linear_hidden(best_hidden_states.unsqueeze(0)) + \
+                                            self.gate_linear_concept(concept_word_embed))
+
+
                     else:
                         concept_word_probs = cal_concept_word_probs(
                             logits=best_logits.unsqueeze(0),
                             concept2words_map=concept2words_map,
                             final_pool=best_final_pool,
                             softmax=self.softmax)
-
-                    gate = self.sigmoid(self.gate_linear(best_hidden_states).unsqueeze(0))
+                        gate = self.sigmoid(self.gate_linear_hidden(best_hidden_states).unsqueeze(0))
 
                     hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs=lm_word_probs,
                                                               concept_word_probs=concept_word_probs,
