@@ -359,7 +359,8 @@ def cal_final_pool(opt, context_concepts, persona_kw_mask, kw_graph_distance_mat
         final_pool = next_pool
     elif persona_pool_r is not None or persona_pool_size is not None:
         # if size of pool < lower_bound, then this pool = 0
-        persona_pool, jump_probs = cal_persona_pool(kw_graph_distance_matrix, persona_kw_mask,
+        persona_pool = (context_pool + persona_kw_mask).clamp(0, 1)
+        persona_pool, jump_probs = cal_persona_pool(kw_graph_distance_matrix, persona_pool,
                                                     softmax, topk=persona_pool_size,
                                                     r=persona_pool_r, lower_bound=persona_lower_bound,
                                                     concept2words_map=concept2words_map)
@@ -565,9 +566,7 @@ def cal_concept_word_probs_attention(embed, hidden, final_pool, concept2words_ma
     scores = torch.bmm(concept_embed.view(-1, topk, 768), hidden.unsqueeze(-1).contiguous().view(-1, 768, 1)).view(
         batch_size, output_len, topk, -1).squeeze(-1)
 
-
     weighted_sum_concept_embed = (softmax(scores).unsqueeze(-1) * concept_embed).sum(dim=-2)
-
 
     probs = torch.scatter(input=torch.zeros_like(lm_word_probs), src=softmax(scores), index=concept2word_idx, dim=-1)
     return probs, weighted_sum_concept_embed
