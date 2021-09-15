@@ -34,12 +34,10 @@ class Gpt2SeqModel(nn.Module):
         self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', cache_dir=cache_model_dir,
                                                                        num_special_tokens=special_token_len)
 
-        self.CLM = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', num_special_tokens=special_token_len)
-        print('【CLM】{}'.format(self.CLM))
-
         # idea interface
         self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
-        self.gate_linear = nn.Linear(768, 1, bias=False)
+        self.gate_linear_hidden = nn.Linear(768, 1, bias=True)
+        self.gate_linear_concept = nn.Linear(768, 1, bias=True)
         self.walk_or_jump_gate_linear = nn.Linear(768, 1, bias=False)
         self.softmax = nn.Softmax(dim=-1)
         self.sigmoid = nn.Sigmoid()
@@ -118,12 +116,17 @@ class Gpt2SeqModel(nn.Module):
             lm_word_probs = cal_lm_word_probs(logits=shift_logits, softmax=self.softmax)
 
             if use_attention:
-                concept_word_probs = cal_concept_word_probs_attention(
+                concept_word_probs, concept_word_embed = cal_concept_word_probs_attention(
                     embed=self.transformer_module.transformer.tokens_embed.weight,
                     hidden=hidden_states[..., src_seq_len:-1, :],
                     lm_word_probs=lm_word_probs,
                     final_pool=final_pool, softmax=self.softmax,
                     concept2words_map=concept2words_map)
+
+                gate = self.sigmoid(self.gate_linear_hidden(hidden_states[..., src_seq_len:-1, :]) + \
+                                    self.gate_linear_concept(concept_word_embed))
+
+
             else:
                 clm_logits, clm_hidden_states = self.CLM(input_seq_CLM)
                 clm_logits = clm_logits[:, :-1, :]
@@ -133,8 +136,7 @@ class Gpt2SeqModel(nn.Module):
                     final_pool=final_pool,
                     concept2words_map=concept2words_map,
                     softmax=self.softmax)
-
-            gate = self.sigmoid(self.gate_linear(hidden_states[..., src_seq_len:-1, :]))
+                gate = self.sigmoid(self.gate_linear_hidden(hidden_states[..., src_seq_len:-1, :]))
 
             hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask)
 
@@ -578,12 +580,16 @@ class Gpt2SeqModel(nn.Module):
                 lm_word_probs = cal_lm_word_probs(logits=logits.unsqueeze(1), softmax=self.softmax, temperature=1.0)
 
                 if use_attention:
-                    concept_word_probs = cal_concept_word_probs_attention(
+                    concept_word_probs, concept_word_embed = cal_concept_word_probs_attention(
                         embed=self.transformer_module.transformer.tokens_embed.weight,
                         hidden=hidden_states[:, -1, :].unsqueeze(1),
                         lm_word_probs=lm_word_probs,
                         final_pool=final_pool, softmax=self.softmax,
                         concept2words_map=concept2words_map)
+                    gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :].unsqueeze(1)) + \
+                                        self.gate_linear_concept(concept_word_embed))
+
+
                 else:
                     clm_logits, clm_hidden_states = self.CLM(token_tensor_CLM)
                     clm_logits = clm_logits[:, -1, :]
@@ -595,7 +601,8 @@ class Gpt2SeqModel(nn.Module):
                         concept2words_map=concept2words_map,
                         softmax=self.softmax)
 
-                gate = self.sigmoid(self.gate_linear(hidden_states[:, -1, :])).unsqueeze(1)
+                    gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :])).unsqueeze(1)
+
                 hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs=lm_word_probs,
                                                           concept_word_probs=concept_word_probs,
                                                           gate=gate, lm_mask=None).squeeze(1)
