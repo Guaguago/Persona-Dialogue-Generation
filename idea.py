@@ -565,8 +565,12 @@ def cal_concept_word_probs_attention(embed, hidden, final_pool, concept2words_ma
     scores = torch.bmm(concept_embed.view(-1, topk, 768), hidden.unsqueeze(-1).contiguous().view(-1, 768, 1)).view(
         batch_size, output_len, topk, -1).squeeze(-1)
 
+
+    weighted_sum_concept_embed = (softmax(scores).unsqueeze(-1) * concept_embed).sum(dim=-2)
+
+
     probs = torch.scatter(input=torch.zeros_like(lm_word_probs), src=softmax(scores), index=concept2word_idx, dim=-1)
-    return probs
+    return probs, weighted_sum_concept_embed
 
 
 def cal_hybrid_word_probs(lm_word_probs, concept_word_probs, gate, lm_mask, ablation=False):
