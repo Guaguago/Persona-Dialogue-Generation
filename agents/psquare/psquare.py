@@ -839,7 +839,7 @@ class PSquareAgent(Agent):
 
     def transmitter_predict(self, src_seq, src_seq_turn, src_seq_dis, tgt_seq=None, tgt_seq_turn=None, cands=None,
                             valid_cands=None, is_training=False, data_for_kw_model=None, persona_kw_mask=None,
-                            final_pool=None, use_attention=None):
+                            final_pool=None, use_attention=None, visualization=False):
         """Produce a prediction from our transmitter.
 
         Keep track of gradients if is_training
@@ -865,7 +865,9 @@ class PSquareAgent(Agent):
                                                    tgt_seq_turn=tgt_seq_turn,
                                                    word2concept_map=self.word2concept_map,
                                                    concept2words_map=self.concept2words_map,
-                                                   final_pool=final_pool)
+                                                   final_pool=final_pool,
+                                                   visualization=visualization,
+                                                   use_attention=use_attention)
                     predictions, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
                     # idx = predictions.unsqueeze(dim=2)
                     # loss = self.criterion(scores, idx)
@@ -889,7 +891,8 @@ class PSquareAgent(Agent):
                                                    sampling=False,
                                                    word2concept_map=self.word2concept_map,
                                                    concept2words_map=self.concept2words_map,
-                                                   final_pool=final_pool)
+                                                   final_pool=final_pool,
+                                                   use_attention=use_attention)
                     # generated response
                     predictions, hybrid_probs, cand_preds = out[0], out[1], out[2]
                     self.metrics['num_selfplay_turns'] += 1
@@ -900,7 +903,8 @@ class PSquareAgent(Agent):
                                                    sampling=True,
                                                    word2concept_map=self.word2concept_map,
                                                    concept2words_map=self.concept2words_map,
-                                                   final_pool=final_pool)
+                                                   final_pool=final_pool,
+                                                   use_attention=use_attention)
                     # generated response
                     predictions, hybrid_probs, cand_preds = out[0], out[1], out[2]
                     idx = predictions.unsqueeze(dim=2)
@@ -1189,7 +1193,7 @@ class PSquareAgent(Agent):
             xs = xs.cuda(cuda_device)
 
         # print('【normal shape】 {}'.format(xs.size()))
-        assert 3==xs.size(1)
+        assert 3 == xs.size(1)
         try:
             sorted_score = self.language_model.score_sentence(xs)
         except RuntimeError as e:
@@ -1202,7 +1206,6 @@ class PSquareAgent(Agent):
             print('shape: {}'.format(xs.size()))
             print('input: {}'.format(xs))
             print('input: {}'.format(xs[0]))
-
 
         # desorted ind
         desorted_ind = np.array(sort_ind).argsort()

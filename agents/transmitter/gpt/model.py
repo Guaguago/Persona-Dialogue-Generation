@@ -169,7 +169,8 @@ class Gpt2SeqModel(nn.Module):
                                                                                      prior_dis,
                                                                                      walk_probs, jump_probs,
                                                                                      concept2words_map=concept2words_map,
-                                                                                     final_pool=final_pool)
+                                                                                     final_pool=final_pool,
+                                                                                     use_attention=use_attention)
                 # gate = self.sigmoid(self.gate_linear_hidden(hidden_states))
                 gate = None
 
@@ -178,7 +179,8 @@ class Gpt2SeqModel(nn.Module):
                 predictions, hybrid_word_probs, hidden_states = self.train_greedy_decoding(batch_size, prior_context,
                                                                                            prior_dis,
                                                                                            concept2words_map=concept2words_map,
-                                                                                           final_pool=final_pool)
+                                                                                           final_pool=final_pool,
+                                                                                           use_attention=use_attention)
                 # gate = self.sigmoid(self.gate_linear_hidden(hidden_states))
                 gate = None
 
@@ -280,7 +282,7 @@ class Gpt2SeqModel(nn.Module):
         return sequence_lengths
 
     def greedy_decoding(self, batch_size, prior_context, prior_dis, walk_probs, hybrid_weights, jump_probs,
-                        concept2words_map, visualization=False, final_pool=None):
+                        concept2words_map, visualization=False, final_pool=None, use_attention=None):
         data_for_visualization = [{} for i in range(batch_size)]
         device = next(self.parameters()).device
         # predict_tok = torch.full((batch_size, 1), fill_value=self.start_idx, dtype=torch.long, device=device)
@@ -355,7 +357,8 @@ class Gpt2SeqModel(nn.Module):
 
         return pred_output, hidden_states, data_for_visualization
 
-    def train_greedy_decoding(self, batch_size, prior_context, prior_dis, concept2words_map=None, final_pool=None):
+    def train_greedy_decoding(self, batch_size, prior_context, prior_dis, concept2words_map=None, final_pool=None,
+                              use_attention=None):
         """
         This function is used to simulate the User in self-play.
         The only difference between this function with greedy_decoding is that
@@ -379,16 +382,29 @@ class Gpt2SeqModel(nn.Module):
             logits = logits[:, -1, :] / self.temperature
 
             lm_word_probs = cal_lm_word_probs(logits=logits.unsqueeze(1), softmax=self.softmax)
-            gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :]))
 
-            concept_word_probs = cal_concept_word_probs(logits=logits.unsqueeze(1),
-                                                        final_pool=final_pool,
-                                                        concept2words_map=concept2words_map,
-                                                        softmax=self.softmax)
+            if use_attention:
+                concept_word_probs, concept_word_embed = cal_concept_word_probs_attention(
+                    embed=self.transformer_module.transformer.tokens_embed.weight,
+                    hidden=hidden_states[:, -1, :].unsqueeze(1),
+                    lm_word_probs=lm_word_probs,
+                    final_pool=final_pool, softmax=self.softmax,
+                    concept2words_map=concept2words_map)
+                gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :].unsqueeze(1)) + \
+                                    self.gate_linear_concept(concept_word_embed))
+
+
+            else:
+                concept_word_probs = cal_concept_word_probs(logits=logits.unsqueeze(1),
+                                                            final_pool=final_pool,
+                                                            concept2words_map=concept2words_map,
+                                                            softmax=self.softmax)
+
+                gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :]))
 
             hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs=lm_word_probs,
                                                       concept_word_probs=concept_word_probs,
-                                                      gate=gate.unsqueeze(1), lm_mask=None)
+                                                      gate=gate, lm_mask=None)
 
             log_probs = hybrid_word_probs.squeeze(1)
 
@@ -441,7 +457,7 @@ class Gpt2SeqModel(nn.Module):
         return pred_output, score_output, hidden_states
 
     def sample_decoding(self, batch_size, prior_context, prior_dis, walk_probs, jump_probs,
-                        concept2words_map=None, final_pool=None, temperature=1.0):
+                        concept2words_map=None, final_pool=None, temperature=1.0, use_attention=None):
         """
         This function is used to simulate the Learned Agent in self-play
         The parameter topk specifies the sampling space at each decoding step.
@@ -467,19 +483,25 @@ class Gpt2SeqModel(nn.Module):
 
             lm_word_probs = cal_lm_word_probs(logits=logits2.unsqueeze(1), softmax=self.softmax)
 
-            concept_word_probs = cal_concept_word_probs(logits=logits2.unsqueeze(1),
-                                                        final_pool=final_pool,
-                                                        concept2words_map=concept2words_map,
-                                                        softmax=self.softmax)
+            if use_attention:
+                concept_word_probs, concept_word_embed = cal_concept_word_probs_attention(
+                    embed=self.transformer_module.transformer.tokens_embed.weight,
+                    hidden=hidden_states[:, -1, :].unsqueeze(1),
+                    lm_word_probs=lm_word_probs,
+                    final_pool=final_pool, softmax=self.softmax,
+                    concept2words_map=concept2words_map)
+                gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :].unsqueeze(1)) + \
+                                    self.gate_linear_concept(concept_word_embed))
 
-            # concept_word_probs = cal_concept_word_probs_attention(
-            #     embed=self.transformer_module.transformer.tokens_embed.weight,
-            #     hidden=hidden_states[:, -1, :].unsqueeze(1),
-            #     lm_word_probs=lm_word_probs,
-            #     final_pool=final_pool, softmax=self.softmax,
-            #     concept2words_map=concept2words_map)
 
-            gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :])).unsqueeze(1)
+            else:
+                concept_word_probs = cal_concept_word_probs(logits=logits2.unsqueeze(1),
+                                                            final_pool=final_pool,
+                                                            concept2words_map=concept2words_map,
+                                                            softmax=self.softmax)
+
+                gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :])).unsqueeze(1)
+
             hybrid_word_probs = cal_hybrid_word_probs(lm_word_probs=lm_word_probs,
                                                       concept_word_probs=concept_word_probs,
                                                       gate=gate, lm_mask=None).squeeze(1)
