@@ -155,9 +155,9 @@ def setup_args():
         # rough enough
         validation_max_exs=-1,
         validation_every_n_secs=3600,
-        validation_metric='ppl',
+        validation_metric='f1',
         validation_metric_mode='min',
-        validation_patience=10,
+        validation_patience=5,
         log_every_n_secs=30,
         gpu=0,
         # logging configuration
