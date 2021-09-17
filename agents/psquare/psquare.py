@@ -943,7 +943,8 @@ class PSquareAgent(Agent):
                                                valid_cands=valid_cands,
                                                word2concept_map=self.word2concept_map,
                                                concept2words_map=self.concept2words_map,
-                                               final_pool=final_pool)
+                                               final_pool=final_pool,
+                                               use_attention=use_attention)
                 predictions, cand_preds = out[0], out[2]
                 if tgt_seq is not None:
                     # calculate loss on targets
@@ -956,7 +957,8 @@ class PSquareAgent(Agent):
                                                    valid_cands=valid_cands,
                                                    word2concept_map=self.word2concept_map,
                                                    concept2words_map=self.concept2words_map,
-                                                   final_pool=final_pool)
+                                                   final_pool=final_pool,
+                                                   use_attention=use_attention)
                     # scores = out[1]
                     # loss = self.criterion(scores, tgt_seq)
                     hybrid_probs = out[1]
