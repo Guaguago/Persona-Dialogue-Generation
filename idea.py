@@ -155,7 +155,7 @@ def cal_final_reward(fcg_score, recall_score, coherent_score, language_score, we
 
 
 def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
-                                    trainer_persona, partner_persona, kw_graph_distance_matrix, device):
+                                    trainer_persona, partner_persona, kw_graph_distance_matrix, device, r=None):
     # calulate persona ground
     both_persona_str = trainer_persona + ' ' + partner_persona
     persona_concepts = extract_concepts(both_persona_str, 50)
@@ -191,7 +191,7 @@ def cal_finding_common_ground_score(send_messages_list, receive_messages_list,
             precision_score = fcg_precision_score(persona_ground, common_ground, kw_graph_distance_matrix)
             fcg_scores[idx_batch][idx_turn] += precision_score
 
-            recall_score = fcg_recall_score(persona_ground, common_ground, kw_graph_distance_matrix, 0.5)
+            recall_score = fcg_recall_score(persona_ground, common_ground, kw_graph_distance_matrix, r)
             recall_scores[idx_batch][idx_turn] += recall_score / (num_turn - idx_turn + 1)
             # common_grounds[idx_batch][idx_turn] += common_ground.tolist()
 

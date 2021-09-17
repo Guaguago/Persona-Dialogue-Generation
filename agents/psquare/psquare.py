@@ -1216,7 +1216,7 @@ class PSquareAgent(Agent):
         scores = np.nan_to_num(scores)
         return scores
 
-    def finding_common_ground_score(self, partner_persona):
+    def finding_common_ground_score(self, partner_persona, r=None):
         receive_messages_list = deepcopy(self.receive_messages)
         send_messages_list = deepcopy(self.send_messages)
 
@@ -1228,7 +1228,8 @@ class PSquareAgent(Agent):
 
         fcg_rewards, recall_rewards = cal_finding_common_ground_score(send_messages_list, receive_messages_list,
                                                                       self.persona_transmitter, partner_persona,
-                                                                      self.kw_graph_distance_matrix, self.device)
+                                                                      self.kw_graph_distance_matrix, self.device,
+                                                                      r=r)
         fcg_rewards = torch.tensor(fcg_rewards).cpu().numpy()
         recall_rewards = torch.tensor(recall_rewards).cpu().numpy()
         return fcg_rewards, recall_rewards

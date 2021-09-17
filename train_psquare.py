@@ -19,7 +19,8 @@ IS_ORIGINAL = True
 FCG, RECALL, COHE, LM = 1., 1., 1., 1.
 
 BEAM_SIZE = 2
-MODEL_NAME = 'fcg_bot'
+MODEL_NAME = 'rl-o-13'
+RECALL_R = 0.5
 
 MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-18'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
@@ -54,6 +55,7 @@ def setup_args():
     parser.set_defaults(
         # idea add ================
         weights=[FCG, RECALL, COHE, LM],
+        recall_r=RECALL_R,
         # =======================
         download_path='{}/downloads'.format(DATA_DIR),
         datapath=DATA_DIR,
