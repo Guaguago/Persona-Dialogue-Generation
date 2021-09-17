@@ -359,8 +359,8 @@ def cal_final_pool(opt, context_concepts, persona_kw_mask, kw_graph_distance_mat
         final_pool = next_pool
     elif persona_pool_r is not None or persona_pool_size is not None:
         # if size of pool < lower_bound, then this pool = 0
-        persona_pool = (context_pool + persona_kw_mask).clamp(0, 1)
-        persona_pool, jump_probs = cal_persona_pool(kw_graph_distance_matrix, persona_pool,
+        # persona_pool = (context_pool + persona_kw_mask).clamp(0, 1)
+        persona_pool, jump_probs = cal_persona_pool(kw_graph_distance_matrix, persona_kw_mask,
                                                     softmax, topk=persona_pool_size,
                                                     r=persona_pool_r, lower_bound=persona_lower_bound,
                                                     concept2words_map=concept2words_map)
