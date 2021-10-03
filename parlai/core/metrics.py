@@ -7,7 +7,7 @@
 Uses locking and shared memory when ``numthreads`` is set to >1 to share metrics
 between processes.
 """
-from idea import kw_tokenize, keyword2id
+from ground_transition import kw_tokenize, keyword2id
 from parlai.core.thread_utils import SharedTable
 from parlai.core.utils import round_sigfigs, no_lock
 from collections import Counter

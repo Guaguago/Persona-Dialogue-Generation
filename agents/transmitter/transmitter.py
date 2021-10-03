@@ -29,13 +29,11 @@ from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
-from idea import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, cal_word2concept_map, \
+from ground_transition import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, cal_word2concept_map, \
     visualize_samples, cal_concept2word_map, cal_concept_pool, cal_to_persona_pool, cal_context_pool, id2keyword, \
     cal_middle_pool, cal_final_pool
-from idea import get_keyword_mask_matrix, get_transition_matrix
-from idea import cal_kw_logits, cal_next_pool, cal_persona_pool
-from idea import prepare_example_persona_kws, prepare_batch_persona_kw_mask
-from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
+from ground_transition import get_keyword_mask_matrix, get_transition_matrix
+from ground_transition import prepare_example_persona_kws, prepare_batch_persona_kw_mask
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
