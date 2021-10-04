@@ -65,8 +65,10 @@ class Gpt2SeqModel(nn.Module):
         self.no_repeat_ngram_size = 2
         self.dropout = nn.Dropout(p=0.2)
         self.linear = nn.Linear(768, 2, bias=False)
-        self.linear_ec = nn.Linear(768, 1, bias=False)
-        self.linear_hl = nn.Linear(768, 1, bias=True)
+        # self.linear_ec = nn.Linear(768, 1, bias=False)
+        # self.linear_hl = nn.Linear(768, 1, bias=True)
+        self.w = nn.Linear(768, 768, bias=False)
+        # self.v = nn.Parameter()
         nn.init.normal_(self.linear.weight, std=0.02)
 
     def forward(self, src_seq, src_seq_turn=None, src_seq_dis=None, tgt_seq=None, tgt_seq_turn=None, cands=None,
