@@ -23,12 +23,12 @@ from agents.transmitter.gpt.optim import GPTOptimizer
 from torch import autograd
 import json
 from agents.psquare.utils import LanguageModel
-from idea import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_map, cal_context_pool, \
+from ground_transition import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_map, cal_context_pool, \
     cal_middle_pool, cal_to_persona_pool, inputs_for_gate_module, cal_final_pool
-from idea import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model
-from idea import cal_word2concept_map, get_keyword_mask_matrix, get_transition_matrix
-from idea import cal_kw_logits, cal_next_pool, cal_persona_pool
-from idea import cal_finding_common_ground_score
+from ground_transition import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model
+from ground_transition import cal_word2concept_map, get_keyword_mask_matrix, get_transition_matrix
+from ground_transition import cal_kw_logits, cal_next_pool, cal_persona_pool
+from ground_transition import cal_finding_common_ground_score
 import torch.nn as nn
 
 task_key_word = 'OriginalPersonaTeacher'

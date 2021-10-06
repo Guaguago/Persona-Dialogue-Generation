@@ -394,7 +394,8 @@ class Gpt2SeqModel(nn.Module):
                     hidden=hidden_states[:, -1, :].unsqueeze(1),
                     lm_word_probs=lm_word_probs,
                     final_pool=final_pool, softmax=self.softmax,
-                    concept2words_map=concept2words_map)
+                    concept2words_map=concept2words_map,
+                    model=self)
                 gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :].unsqueeze(1)) + \
                                     self.gate_linear_concept(concept_word_embed))
 
@@ -494,7 +495,8 @@ class Gpt2SeqModel(nn.Module):
                     hidden=hidden_states[:, -1, :].unsqueeze(1),
                     lm_word_probs=lm_word_probs,
                     final_pool=final_pool, softmax=self.softmax,
-                    concept2words_map=concept2words_map)
+                    concept2words_map=concept2words_map,
+                    model=self)
                 gate = self.sigmoid(self.gate_linear_hidden(hidden_states[:, -1, :].unsqueeze(1)) + \
                                     self.gate_linear_concept(concept_word_embed))
 
