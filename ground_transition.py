@@ -327,6 +327,28 @@ def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, sof
     return to_persona_pool
 
 
+def cal_expanded_ground(opt, context_concepts, persona_kw_mask, kw_graph_distance_matrix, device,
+                        data_for_kw_model, concept2words_map, softmax, kw_mask_matrix, kw_model):
+    middle_pool_size = opt.get('middle_pool_size')
+    next_pool_size = opt.get('next_pool_size')
+    persona_pool_r = opt.get('persona_pool_r')
+    persona_pool_size = opt.get('persona_pool_size')
+    use_context_pool = opt.get('use_context_pool')
+    use_to_persona_pool = opt.get('use_to_persona_pool')
+    drop_literal_persona = opt.get('drop_literal_persona')
+    context_lower_bound = opt.get('context_lower_bound')
+    persona_lower_bound = opt.get('persona_lower_bound')
+
+    # if size of pool < lower_bound, then this pool = 0
+    context_ground = cal_context_pool(context_concepts=context_concepts,
+                                      lower_bound=context_lower_bound, device=device)
+
+    expanded_ground = expansion_transition(ground=persona_kw_mask, topk=persona_pool_size,
+                                           transition_matrix=kw_graph_distance_matrix,
+                                           concept2words_map=concept2words_map)
+    return expanded_ground
+
+
 def cal_final_pool(opt, context_concepts, persona_kw_mask, kw_graph_distance_matrix, device,
                    data_for_kw_model, concept2words_map, softmax, kw_mask_matrix, kw_model):
     middle_pool_size = opt.get('middle_pool_size')
@@ -387,6 +409,7 @@ def cal_final_pool(opt, context_concepts, persona_kw_mask, kw_graph_distance_mat
 
     has_concept = final_pool.sum(-1).clamp(0, 1).unsqueeze(-1)
     final_pool = final_pool * has_concept + (1 - has_concept)
+
     return final_pool
 
 
@@ -414,9 +437,30 @@ def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax
     return pool
 
 
+def expansion_transition(ground, topk, transition_matrix, concept2words_map):
+    matrix = transition_matrix['matrix']
+    max = 100
+    masked_matrix = matrix * ground.unsqueeze(1)
+    masked_matrix = torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * 100, masked_matrix)
+    distance = masked_matrix.min(dim=-1)[0]
+
+    # drop words not in GPT vocab
+    distance = distance * concept2words_map.sum(-1).ne(0)
+    distance = torch.where(distance.eq(0), torch.ones_like(distance) * max, distance)
+
+    idx = distance.topk(k=topk, largest=False)[1]
+    expanded_ground = torch.scatter(input=torch.zeros_like(ground),
+                                    src=torch.ones_like(ground),
+                                    index=idx, dim=-1)
+    return expanded_ground
+
+
 def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, lower_bound=0, topk=None,
                      concept2words_map=None):
     probs = None
+
+    expansion_transition(ground=persona_kws, topk=topk, transition_matrix=kw_graph_distance_matrix,
+                         concept2words_map=concept2words_map)
 
     # has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
     matrix = kw_graph_distance_matrix['matrix']
@@ -547,10 +591,13 @@ def cal_concept_word_probs_attention(embed, hidden, final_pool, concept2words_ma
         concept_words.sum(-1).gt(0).type(torch.bool)].view(
         batch_size, -1, 7)
 
+    tempt_probs = torch.tensor(lm_word_probs)
     topk = top_concept2word_map.size(1)
 
+
+    tempt_probs[:, :, 0] = 0
     top_concept_word_p = torch.gather(dim=-1,
-                                      input=lm_word_probs.unsqueeze(-2).expand(-1, -1, top_concept2word_map.size(-2),
+                                      input=tempt_probs.unsqueeze(-2).expand(-1, -1, top_concept2word_map.size(-2),
                                                                                -1),
                                       index=top_concept2word_map.unsqueeze(1).expand(-1, output_len, -1, -1).type(
                                           torch.int64))
@@ -568,11 +615,11 @@ def cal_concept_word_probs_attention(embed, hidden, final_pool, concept2words_ma
     # scores = torch.bmm(concept_embed.view(-1, topk, 768), hidden.unsqueeze(-1).contiguous().view(-1, 768, 1)).view(
     #     batch_size, output_len, topk, -1).squeeze(-1)
 
-    scores = torch.matmul(model.w(concept_embed), hidden.unsqueeze(-1)).squeeze(-1)
-    weighted_sum_concept_embed = (softmax(scores).unsqueeze(-1) * concept_embed).sum(dim=-2)
-
-
-
+    scores = torch.matmul(concept_embed, hidden.unsqueeze(-1)).squeeze(-1)
+    # torch.matmul(concept_embed, hidden.unsqueeze(-1))
+    # scores = torch.matmul(model.w(concept_embed), hidden.unsqueeze(-1)).squeeze(-1)
+    # weighted_sum_concept_embed = (softmax(scores).unsqueeze(-1) * concept_embed).sum(dim=-2)
+    weighted_sum_concept_embed = torch.matmul(softmax(scores).unsqueeze(-2), concept_embed).squeeze(-2)
     # weighted_sum_concept_embed = (softmax(scores).unsqueeze(-1) * concept_embed).sum(dim=-2)
 
     probs = torch.scatter(input=torch.zeros_like(lm_word_probs), src=softmax(scores), index=concept2word_idx, dim=-1)

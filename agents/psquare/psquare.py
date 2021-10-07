@@ -23,8 +23,9 @@ from agents.transmitter.gpt.optim import GPTOptimizer
 from torch import autograd
 import json
 from agents.psquare.utils import LanguageModel
-from ground_transition import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_map, cal_context_pool, \
-    cal_middle_pool, cal_to_persona_pool, inputs_for_gate_module, cal_final_pool
+from ground_transition import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_map, \
+    cal_context_pool, \
+    cal_middle_pool, cal_to_persona_pool, inputs_for_gate_module, cal_final_pool, cal_expanded_ground
 from ground_transition import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model
 from ground_transition import cal_word2concept_map, get_keyword_mask_matrix, get_transition_matrix
 from ground_transition import cal_kw_logits, cal_next_pool, cal_persona_pool
@@ -681,7 +682,7 @@ class PSquareAgent(Agent):
         data_for_kw_model = prepare_batch_for_kw_model(observations, device=self.device)
         context_concepts = data_for_kw_model['batch_context_keywords']
 
-        final_pool = cal_final_pool(self.opt, context_concepts, persona_kw_mask, self.kw_graph_distance_matrix,
+        final_pool = cal_expanded_ground(self.opt, context_concepts, persona_kw_mask, self.kw_graph_distance_matrix,
                                     self.device, data_for_kw_model, self.concept2words_map, self.transmitter.softmax,
                                     self.kw_mask_matrix, self.transmitter.kw_model)
 
