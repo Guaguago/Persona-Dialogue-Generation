@@ -343,9 +343,12 @@ def cal_expanded_ground(opt, context_concepts, persona_kw_mask, kw_graph_distanc
     context_ground = cal_context_pool(context_concepts=context_concepts,
                                       lower_bound=context_lower_bound, device=device)
 
-    expanded_ground = expansion_transition(ground=persona_kw_mask, topk=persona_pool_size,
+    ground = torch.logical_or(context_ground, persona_kw_mask)
+
+    expanded_ground = expansion_transition(ground=ground, topk=persona_pool_size,
                                            transition_matrix=kw_graph_distance_matrix,
                                            concept2words_map=concept2words_map)
+
     return expanded_ground
 
 
@@ -594,11 +597,10 @@ def cal_concept_word_probs_attention(embed, hidden, final_pool, concept2words_ma
     tempt_probs = torch.tensor(lm_word_probs)
     topk = top_concept2word_map.size(1)
 
-
     tempt_probs[:, :, 0] = 0
     top_concept_word_p = torch.gather(dim=-1,
                                       input=tempt_probs.unsqueeze(-2).expand(-1, -1, top_concept2word_map.size(-2),
-                                                                               -1),
+                                                                             -1),
                                       index=top_concept2word_map.unsqueeze(1).expand(-1, output_len, -1, -1).type(
                                           torch.int64))
     # [bs, len, top]
