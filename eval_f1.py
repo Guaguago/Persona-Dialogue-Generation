@@ -1,7 +1,7 @@
 from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
 IS_ORIGINAL = True
-PERSONA_POOL_R = 6.0
+
 
 def setup_task():
     if IS_ORIGINAL:
@@ -13,7 +13,7 @@ def setup_task():
 
 def setup_trained_weights():
     if IS_ORIGINAL:
-        weights_name = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-45/transmitter/pegg-o.model'
+        weights_name = '/apdcephfs/share_916081/chencxu/pegg/AAAI/2g-o-4/psquare/r-o-18.model'
     else:
         weights_name = './tmp/psquare/psqaure_revised.model'
     return weights_name
@@ -47,7 +47,6 @@ if __name__ == '__main__':
         gpu=0,
         batchsize=10,
         beam_size=2,
-        persona_pool_r=PERSONA_POOL_R,
         display_examples=False
     )
     opt = parser.parse_args(print_args=False)
