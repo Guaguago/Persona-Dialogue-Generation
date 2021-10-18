@@ -989,7 +989,7 @@ class TransformerAgent(Agent):
                                                                        tgt_seq_turn, cands,
                                                                        cand_inds, sampling_cands, is_training,
                                                                        idea_interface=idea_dict,
-                                                                       visualization=self.opt['visualization'],
+                                                                       visualization=self.opt.get('visualization'),
                                                                        final_pool=final_pool,
                                                                        use_attention=use_attention)
 
