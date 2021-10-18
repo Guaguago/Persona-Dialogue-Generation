@@ -45,9 +45,8 @@ if __name__ == '__main__':
         model='agents.transmitter.transmitter:TransformerAgent',
         model_file=model_name,
         gpu=0,
-        batchsize=10,
+        batchsize=6,
         beam_size=2,
-        display_examples=False
     )
     opt = parser.parse_args(print_args=False)
     eval_f1(opt, print_parser=parser)
