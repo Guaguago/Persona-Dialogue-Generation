@@ -616,8 +616,8 @@ def cal_concept_word_probs_attention(embed, hidden, final_pool, concept2words_ma
     # scores = model.linear_ec(concept_embed) + model.linear_hl(hidden).unsqueeze(-1)
     # scores = torch.bmm(concept_embed.view(-1, topk, 768), hidden.unsqueeze(-1).contiguous().view(-1, 768, 1)).view(
     #     batch_size, output_len, topk, -1).squeeze(-1)
-
-    scores = torch.matmul(concept_embed, hidden.unsqueeze(-1)).squeeze(-1)
+    shifted_hidden = torch.cat([hidden[:, 0:1, :], hidden[:, :-1, :]], dim=1)
+    scores = torch.matmul(concept_embed, shifted_hidden.unsqueeze(-1)).squeeze(-1)
     # torch.matmul(concept_embed, hidden.unsqueeze(-1))
     # scores = torch.matmul(model.w(concept_embed), hidden.unsqueeze(-1)).squeeze(-1)
     # weighted_sum_concept_embed = (softmax(scores).unsqueeze(-1) * concept_embed).sum(dim=-2)
