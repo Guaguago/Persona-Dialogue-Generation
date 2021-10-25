@@ -45,6 +45,7 @@ import copy
 import importlib
 import random
 import time
+import csv
 
 from functools import lru_cache
 
@@ -213,7 +214,7 @@ class World(object):
         # when we know the size of the data
         if self.max_exs > 0 or self.num_examples():
             self.total_epochs = (
-                self.total_parleys * self.opt.get('batchsize', 1) / self.num_examples()
+                    self.total_parleys * self.opt.get('batchsize', 1) / self.num_examples()
             )
         # when we do not know the size of the data
         else:
@@ -244,6 +245,7 @@ class DialogPartnerWorld(World):
 
     def parley(self):
         """Agent 0 goes first. Alternate between the two agents."""
+        entry = []
         acts = self.acts
         agents = self.agents
         acts[0] = agents[0].act()
@@ -251,6 +253,17 @@ class DialogPartnerWorld(World):
         acts[1] = agents[1].act()
         agents[0].observe(validate(acts[1]))
         self.update_counters()
+        import examples
+        if examples.CSV:
+            file = examples.CSV
+            entry.append(acts[0]['text'])
+            entry.append(acts[1]['text'])
+            self.write_csv(file, entry)
+
+    def write_csv(self, path, row):
+        with open(path, 'a') as f:
+            w = csv.writer(f)
+            w.writerow(row)
 
     def episode_done(self):
         """Only the first agent indicates when the episode is done."""
@@ -266,9 +279,9 @@ class DialogPartnerWorld(World):
     def report(self):
         def show(metric):
             if (
-                'all' in self.show_metrics
-                or metric in self.show_metrics
-                or metric == 'exs'
+                    'all' in self.show_metrics
+                    or metric in self.show_metrics
+                    or metric == 'exs'
             ):
                 return True
             return False
@@ -631,7 +644,7 @@ class BatchWorld(World):
         # Call update on agent
         a = self.world.get_agents()[agent_idx]
         if hasattr(a, 'batch_act') and not (
-            hasattr(a, 'use_batch_act') and not a.use_batch_act
+                hasattr(a, 'use_batch_act') and not a.use_batch_act
         ):
             batch_actions = a.batch_act(batch_observation)
             # Store the actions locally in each world.
@@ -658,9 +671,13 @@ class BatchWorld(World):
             for w in self.worlds:
                 w.parley_init()
 
+        entry = []
         for agent_idx in range(num_agents):
             # The agent acts.
             batch_act = self.batch_act(agent_idx, batch_observations[agent_idx])
+            import examples
+            if examples.CSV:
+                entry.append(batch_act[0]['text'])
             self.acts[agent_idx] = batch_act
             # We possibly execute this action in the world.
             if hasattr(self.world, 'execute'):
@@ -672,6 +689,15 @@ class BatchWorld(World):
                 if obs is not None:
                     batch_observations[other_index] = obs
         self.update_counters()
+        import examples
+        if examples.CSV:
+            file = examples.CSV
+            self.write_csv(file, entry)
+
+    def write_csv(self, path, row):
+        with open(path, 'a') as f:
+            w = csv.writer(f)
+            w.writerow(row)
 
     def display(self):
         s = "[--batchsize " + str(len(self.worlds)) + "--]\n"
@@ -780,7 +806,7 @@ class HogwildProcess(Process):
 
                 # process an example or wait for reset
                 if not world.epoch_done() or self.opt.get('datatype').startswith(
-                    'train', False
+                        'train', False
                 ):
                     # do one example if any available
                     world.parley()
@@ -897,9 +923,9 @@ class HogwildWorld(World):
                 self.max_exs = -1
         if self.max_exs > 0:
             return (
-                self.sync['total_parleys'].value
-                * self.opt.get('batchsize', 1)
-                / self.num_examples()
+                    self.sync['total_parleys'].value
+                    * self.opt.get('batchsize', 1)
+                    / self.num_examples()
             )
         else:
             return self.total_epochs
@@ -1007,8 +1033,8 @@ def create_task(opt, user_agents, default_world=None):
     # When building pytorch data, there is a point where task and pyt_task
     # are the same; make sure we discount that case.
     pyt_multitask = task is not None and (
-        (pyt_task is not None and pyt_task != task)
-        or (pyt_dataset is not None and pyt_dataset != task)
+            (pyt_task is not None and pyt_task != task)
+            or (pyt_dataset is not None and pyt_dataset != task)
     )
     if not task:
         opt['task'] = 'pytorch_teacher'

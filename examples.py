@@ -2,6 +2,11 @@ from parlai.scripts.eval_model import eval_model, setup_args as base_setup_args
 
 IS_ORIGINAL = True
 
+# ---------------------
+VIS = True
+# CSV = '/apdcephfs/share_916081/chencxu/pegg/test.csv'
+CSV = None
+# ---------------------
 
 def setup_task():
     if IS_ORIGINAL:
@@ -13,11 +18,9 @@ def setup_task():
 
 def setup_trained_weights():
     if IS_ORIGINAL:
-        # weights_name = './tmp/psquare/psqaure_original.model'
-        # weights_name = './tmp/transmitter/transmitter_original.model'
-        weights_name = '/apdcephfs/share_916081/chencxu/pegg/11155new/transmitter/pegg-o.model'
+        weights_name = '/apdcephfs/share_916081/chencxu/pegg/AAAI/2g-o-4/psquare/r-o-18.model'
     else:
-        weights_name = '/apdcephfs/share_916081/chencxu/pegg/11155new/transmitter/pegg-r.model'
+        weights_name = './tmp/psquare/psqaure_revised.model'
     return weights_name
 
 
@@ -47,9 +50,9 @@ if __name__ == '__main__':
         model='agents.transmitter.transmitter:TransformerAgent',
         model_file=model_name,
         gpu=0,
-        batchsize=10,
-        beam_size=1,
-        display_examples=True,
+        batchsize=1,
+        beam_size=2,
+        vis=VIS,
         visualization=True
     )
     opt = parser.parse_args(print_args=False)
