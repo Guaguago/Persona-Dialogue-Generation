@@ -15,7 +15,7 @@ from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 
 # Parameters
 MODEL = 'transmitter'
-NAME = "pegg-o"
+NAME = "cosplay_base"
 IS_ORIGINAL = True
 
 GEN, GATE, CLS = 1., 1., 1.
@@ -31,8 +31,8 @@ CONTEXT_LOWER_BOUND = 0
 USE_ATTENTION = True
 BEAM_SIZE = 2
 
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-25'
-DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
+MODEL_DIR = '/apdcephfs/private_chencxu/taiji_outputs/model'
+DATA_DIR = '/apdcephfs/private_chencxu/taiji_inputs/cosplay/data'
 
 
 def setup_task():
