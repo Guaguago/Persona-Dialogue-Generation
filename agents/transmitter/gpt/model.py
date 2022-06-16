@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
 import os
 
-from ground_transition import load_kw_model, cal_concept_word_probs, cal_hybrid_word_probs, id2keyword, cal_lm_word_probs, \
+from concept_set_framework import load_kw_model, cal_concept_word_probs, cal_hybrid_word_probs, id2keyword, cal_lm_word_probs, \
     cal_concept_word_probs_attention
 
 
@@ -17,7 +17,7 @@ class Gpt2SeqModel(nn.Module):
                  sample=False, device=None,
                  temperature=0.7):
         super().__init__()
-        cache_model_dir = os.path.join(opt['datapath'], 'models', 'gpt_models')
+        cache_model_dir = os.path.join(opt['datapath'], 'from_pretrained')
         # original vocab size plus special vocab
         self.vocab_size = vocab_size + 40478
         self.token_type_dict = {}

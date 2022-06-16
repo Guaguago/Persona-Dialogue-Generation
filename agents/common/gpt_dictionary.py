@@ -48,7 +48,7 @@ class GPTDictionaryAgent(DictionaryAgent):
     def __init__(self, opt):
         super().__init__(opt)
         # initialize from voab path
-        cache_vocab_dir = os.path.join(opt['datapath'], 'models', 'gpt_models')
+        cache_vocab_dir = os.path.join(opt['datapath'], 'from_pretrained')
         self.special_tokens = [SpecialToken.talk_1_start,
                                SpecialToken.talk_1_end,
                                SpecialToken.persona_start,

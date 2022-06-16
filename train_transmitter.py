@@ -30,7 +30,6 @@ PERSONA_LOWER_BOUND = 0
 CONTEXT_LOWER_BOUND = 0
 USE_ATTENTION = True
 BEAM_SIZE = 2
-
 MODEL_DIR = '/apdcephfs/private_chencxu/taiji_outputs/model'
 DATA_DIR = '/apdcephfs/private_chencxu/taiji_inputs/cosplay/data'
 

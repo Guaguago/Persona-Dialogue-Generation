@@ -29,12 +29,12 @@ from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
-from ground_transition import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, \
+from concept_set_framework import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, \
     cal_word2concept_map, \
     visualize_samples, cal_concept2word_map, cal_concept_pool, cal_to_persona_pool, cal_context_pool, id2keyword, \
-    cal_middle_pool, cal_final_pool, cal_expanded_ground
-from ground_transition import get_keyword_mask_matrix, get_transition_matrix
-from ground_transition import prepare_example_persona_kws, prepare_batch_persona_kw_mask
+    cal_middle_pool, cal_final_pool, cal_concept_set
+from concept_set_framework import get_keyword_mask_matrix, get_transition_matrix
+from concept_set_framework import prepare_example_persona_kws, prepare_batch_persona_kw_mask
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
@@ -964,9 +964,9 @@ class TransformerAgent(Agent):
         data_for_kw_model = prepare_batch_for_kw_model(observations, device=self.device)
         context_concepts = data_for_kw_model['batch_context_keywords']
 
-        final_pool = cal_expanded_ground(self.opt, context_concepts, persona_kw_mask, self.kw_graph_distance_matrix,
-                                         self.device, data_for_kw_model, self.concept2words_map, self.model.softmax,
-                                         self.kw_mask_matrix, self.model.kw_model)
+        final_pool = cal_concept_set(self.opt, context_concepts, persona_kw_mask, self.kw_graph_distance_matrix,
+                                     self.device, data_for_kw_model, self.concept2words_map, self.model.softmax,
+                                     self.kw_mask_matrix, self.model.kw_model)
 
         # final pool -> gate label
         data_for_gate = inputs_for_gate_module(tgt_seq, self.word2concept_map, pool=final_pool)

@@ -2,7 +2,7 @@ from nltk.util import ngrams
 import nltk
 import random
 
-nltk.data.path.append('/apdcephfs/share_916081/chencxu/pegg/data/nltk_data')
+nltk.data.path.append('/apdcephfs/private_chencxu/taiji_inputs/cosplay/data/nltk_data')
 from nltk.stem import WordNetLemmatizer
 import pickle
 import torch
