@@ -19,13 +19,7 @@ NAME = "cosplay_base"
 IS_ORIGINAL = True
 
 GEN, GATE, CLS = 1., 1., 1.
-MIDDLE_POOL_SIZE = None
-NEXT_POOL_SIZE = None
-PERSONA_POOL_R = None
-PERSONA_POOL_SIZE = 50
-USE_TO_PERSONA_POOL = False
-USE_CONTEXT_POOL = False
-DROP_LITERAL_PERSONA = False
+PERSONA_POOL_SIZE = 250
 PERSONA_LOWER_BOUND = 0
 CONTEXT_LOWER_BOUND = 0
 USE_ATTENTION = True
@@ -103,16 +97,10 @@ def setup_args():
         gen_weight=GEN,
         gate_weight=GATE,
         cls_weight=CLS,
-        middle_pool_size=MIDDLE_POOL_SIZE,
         persona_pool_size=PERSONA_POOL_SIZE,
-        next_pool_size=NEXT_POOL_SIZE,
-        use_context_pool=USE_CONTEXT_POOL,
-        use_to_persona_pool=USE_TO_PERSONA_POOL,
-        drop_literal_persona=DROP_LITERAL_PERSONA,
         persona_lower_bound=PERSONA_LOWER_BOUND,
         context_lower_bound=CONTEXT_LOWER_BOUND,
         use_attention=USE_ATTENTION,
-        persona_pool_r=PERSONA_POOL_R,
         # ======================
         model_file='{}/{}/{}.model'.format(MODEL_DIR, MODEL, exp_name),
         dict_tokenizer='split',

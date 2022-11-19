@@ -1,6 +1,9 @@
 from nltk.util import ngrams
 import nltk
 import random
+from tqdm import tqdm
+
+from code_structure import SET_EXPANSION
 
 nltk.data.path.append('/apdcephfs/private_chencxu/taiji_inputs/cosplay/data/nltk_data')
 from nltk.stem import WordNetLemmatizer
@@ -8,7 +11,8 @@ import pickle
 import torch
 import torch.nn as nn
 import numpy as np
-from kw_model import KW_GNN
+
+# from kw_model import KW_GNN
 
 _lemmatizer = WordNetLemmatizer()
 name_list = ['keyword2id', 'id2keyword', 'node2id', 'word2id', 'CN_hopk_graph_dict']
@@ -19,7 +23,7 @@ for name in name_list:
               "rb") as f:
         pkl_list.append(pickle.load(f))
 
-keyword2id, id2keyword, node2id, word2id, CN_hopk_graph_dict = pkl_list
+concept2id, id2keyword, node2id, word2id, CN_hopk_graph_dict = pkl_list
 
 
 # idea interface
@@ -30,30 +34,43 @@ def prepare_example_persona_kws(history, persona_str):
         return extract_concepts(persona_str, 30)
 
 
-def prepare_batch_persona_kw_mask(obs, device):
+def prepare_batch_persona_concept_mask(obs, device):
     batch_persona_kws = torch.tensor([o['persona_kws'] for o in obs if len(o['text2vec']) > 0]).to(device)
-    mask = torch.zeros(len(keyword2id)).to(device).unsqueeze(0).expand(len(batch_persona_kws), -1)
+    mask = torch.zeros(len(concept2id)).to(device).unsqueeze(0).expand(len(batch_persona_kws), -1)
     batch_persona_kws_mask = mask.scatter(dim=1, index=batch_persona_kws, src=torch.ones_like(mask))
     batch_persona_kws_mask[:, 0:2] = 0
     return batch_persona_kws_mask
 
 
-def get_transition_matrix(path, device):
+def create_concept_dist_matrix(path, device, debug=False):
     MAX = 100
-    kw_graph_distance_matrix = torch.ones((len(keyword2id), len(keyword2id))).to(device) * -1
-    kw_graph_distance_dict = load_pickle(path)
-    for node1, node2 in kw_graph_distance_dict.keys():
-        kw_graph_distance_matrix[keyword2id[node1], keyword2id[node2]] = kw_graph_distance_dict[(node1, node2)]
-    kw_graph_distance_matrix[torch.isinf(kw_graph_distance_matrix)] = -1.
-    max_distance = kw_graph_distance_matrix.max().item()
-    kw_graph_distance_matrix = torch.where(kw_graph_distance_matrix.eq(-1),
-                                           torch.ones_like(kw_graph_distance_matrix) * MAX,
-                                           kw_graph_distance_matrix)
-    min_distance = kw_graph_distance_matrix.view(-1).topk(2680, largest=False)[0].unique()[1].item()
-    kw_graph_distance_matrix = torch.where(kw_graph_distance_matrix.eq(0),
-                                           torch.ones_like(kw_graph_distance_matrix) * min_distance,
-                                           kw_graph_distance_matrix)
-    return {'matrix': kw_graph_distance_matrix, 'max': max_distance, 'min': min_distance}
+    concept_dist_matrix = torch.ones((len(concept2id), len(concept2id))).to(device) * -1
+    concept_distance_dict = load_pickle(path)
+    for node1, node2 in tqdm(concept_distance_dict.keys(), desc='creating concept distance matrix'):
+        concept_dist_matrix[concept2id[node1], concept2id[node2]] = concept_distance_dict[(node1, node2)]
+    concept_dist_matrix[torch.isinf(concept_dist_matrix)] = -1.
+    max_distance = concept_dist_matrix.max().item()
+    concept_dist_matrix = torch.where(concept_dist_matrix.eq(-1),
+                                      torch.ones_like(concept_dist_matrix) * MAX,
+                                      concept_dist_matrix)
+    min_distance = concept_dist_matrix.view(-1).topk(2680, largest=False)[0].unique()[1].item()
+    concept_dist_matrix = torch.where(concept_dist_matrix.eq(0),
+                                      torch.ones_like(concept_dist_matrix) * min_distance,
+                                      concept_dist_matrix)
+
+    output_pkl = {'matrix': concept_dist_matrix, 'max': max_distance, 'min': min_distance}
+    pkl_path = '/'.join(path.split('/')[:-1]) + '/concept_dist_matrix.pkl'
+
+    with open(pkl_path, 'wb') as f:
+        pickle.dump(output_pkl, f, protocol=4)
+
+    return output_pkl
+
+
+def load_concept_dist_matrix(pkl_file):
+    with open(pkl_file, 'rb') as pkl_in:
+        ret = pickle.load(pkl_in)
+    return ret
 
 
 ## kw model forward
@@ -276,7 +293,7 @@ def cal_concept_pool(concept_logits, distance_matrix, context_concepts, persona_
     return concept_pool, concept_probs
 
 
-def cal_context_pool(context_concepts, device, lower_bound=0):
+def cal_context_set(context_concepts, device, lower_bound=0):
     batch_size = context_concepts.size(0)
     context_concept_pool = torch.scatter(input=torch.zeros([batch_size, 2680], dtype=torch.bool, device=device),
                                          src=torch.ones_like(context_concepts, dtype=torch.bool),
@@ -327,93 +344,23 @@ def cal_to_persona_pool(distance_matrix, context_pool, persona_concept_mask, sof
     return to_persona_pool
 
 
-def cal_expanded_ground(opt, context_concepts, persona_kw_mask, kw_graph_distance_matrix, device,
-                        data_for_kw_model, concept2words_map, softmax, kw_mask_matrix, kw_model):
-    middle_pool_size = opt.get('middle_pool_size')
-    next_pool_size = opt.get('next_pool_size')
-    persona_pool_r = opt.get('persona_pool_r')
-    persona_pool_size = opt.get('persona_pool_size')
-    use_context_pool = opt.get('use_context_pool')
-    use_to_persona_pool = opt.get('use_to_persona_pool')
-    drop_literal_persona = opt.get('drop_literal_persona')
+def cal_concept_set(opt, context_concepts, persona_set, kw_graph_distance_matrix, device, concept2words_map, k=250):
     context_lower_bound = opt.get('context_lower_bound')
-    persona_lower_bound = opt.get('persona_lower_bound')
 
     # if size of pool < lower_bound, then this pool = 0
-    context_ground = cal_context_pool(context_concepts=context_concepts,
-                                      lower_bound=context_lower_bound, device=device)
+    context_set = cal_context_set(context_concepts=context_concepts,
+                                  lower_bound=context_lower_bound, device=device)
+    SET_EXPANSION()
+    union_set = set_union(context_set, persona_set)
+    SET_EXPANSION()
+    expanded_set = set_expansion(dist_matrix=kw_graph_distance_matrix,
+                                 concept_set=union_set, topk=k,
+                                 concept2words_map=concept2words_map)
 
-    ground = torch.logical_or(context_ground, persona_kw_mask)
+    has_concept = expanded_set.sum(-1).clamp(0, 1).unsqueeze(-1)
+    expanded_set = expanded_set * has_concept + (1 - has_concept)
 
-    expanded_ground = expansion_transition(ground=ground, topk=persona_pool_size,
-                                           transition_matrix=kw_graph_distance_matrix,
-                                           concept2words_map=concept2words_map)
-
-    return expanded_ground
-
-
-def cal_final_pool(opt, context_concepts, persona_kw_mask, kw_graph_distance_matrix, device,
-                   data_for_kw_model, concept2words_map, softmax, kw_mask_matrix, kw_model):
-    middle_pool_size = opt.get('middle_pool_size')
-    next_pool_size = opt.get('next_pool_size')
-    persona_pool_r = opt.get('persona_pool_r')
-    persona_pool_size = opt.get('persona_pool_size')
-    use_context_pool = opt.get('use_context_pool')
-    use_to_persona_pool = opt.get('use_to_persona_pool')
-    drop_literal_persona = opt.get('drop_literal_persona')
-    context_lower_bound = opt.get('context_lower_bound')
-    persona_lower_bound = opt.get('persona_lower_bound')
-
-    # if size of pool < lower_bound, then this pool = 0
-    context_pool = cal_context_pool(context_concepts=context_concepts,
-                                    lower_bound=context_lower_bound, device=device)
-
-    if middle_pool_size is not None:
-        middle_pool = cal_middle_pool(distance_matrix=kw_graph_distance_matrix,
-                                      context_pool=context_pool, topk=middle_pool_size,
-                                      persona_concept_mask=persona_kw_mask,
-                                      softmax=softmax,
-                                      concept2words_map=concept2words_map)
-        final_pool = middle_pool
-    elif next_pool_size is not None:
-        kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, kw_mask_matrix, kw_model)
-        # if context_pool = 0, then this pool = 1
-        next_pool, next_probs = cal_next_pool(logits=kw_logits, topk=next_pool_size,
-                                              context_pool=context_pool,
-                                              softmax=softmax)
-        final_pool = next_pool
-    elif persona_pool_r is not None or persona_pool_size is not None:
-        # if size of pool < lower_bound, then this pool = 0
-        # persona_pool = (context_pool + persona_kw_mask).clamp(0, 1)
-        persona_pool, jump_probs = cal_persona_pool(kw_graph_distance_matrix, persona_kw_mask,
-                                                    softmax, topk=persona_pool_size,
-                                                    r=persona_pool_r, lower_bound=persona_lower_bound,
-                                                    concept2words_map=concept2words_map)
-        final_pool = persona_pool
-        if drop_literal_persona:
-            final_pool = (persona_pool - persona_kw_mask).clamp(0, 1)
-    else:
-        all_concept_pool = torch.ones_like(context_pool)
-        final_pool = all_concept_pool
-
-    if use_to_persona_pool:
-        # if concept_pool or persona_pool = 0 then this pool = 1
-        to_persona_pool = cal_to_persona_pool(distance_matrix=kw_graph_distance_matrix,
-                                              context_pool=context_pool,
-                                              persona_concept_mask=persona_kw_mask,
-                                              softmax=softmax,
-                                              concept2words_map=concept2words_map)
-        final_pool = (final_pool + to_persona_pool).clamp(0, 1)
-
-    if use_context_pool:
-        # if persona_pool=0, then this pool=0
-        context_pool = context_pool * ((final_pool.eq(0).sum(-1).clamp(0, 1)).unsqueeze(-1))
-        final_pool = (final_pool + context_pool).clamp(0, 1)
-
-    has_concept = final_pool.sum(-1).clamp(0, 1).unsqueeze(-1)
-    final_pool = final_pool * has_concept + (1 - has_concept)
-
-    return final_pool
+    return expanded_set
 
 
 def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax, topk, concept2words_map):
@@ -440,66 +387,33 @@ def cal_middle_pool(distance_matrix, context_pool, persona_concept_mask, softmax
     return pool
 
 
-def expansion_transition(ground, topk, transition_matrix, concept2words_map):
-    matrix = transition_matrix['matrix']
-    max = 100
-    masked_matrix = matrix * ground.unsqueeze(1)
-    masked_matrix = torch.where(masked_matrix.eq(0), torch.ones_like(masked_matrix) * 100, masked_matrix)
-    distance = masked_matrix.min(dim=-1)[0]
-
-    # drop words not in GPT vocab
-    distance = distance * concept2words_map.sum(-1).ne(0)
-    distance = torch.where(distance.eq(0), torch.ones_like(distance) * max, distance)
-
-    idx = distance.topk(k=topk, largest=False)[1]
-    expanded_ground = torch.scatter(input=torch.zeros_like(ground),
-                                    src=torch.ones_like(ground),
-                                    index=idx, dim=-1)
-    return expanded_ground
+def set_union(a, b):
+    return torch.logical_or(a, b)
 
 
-def cal_persona_pool(kw_graph_distance_matrix, persona_kws, softmax, r=None, lower_bound=0, topk=None,
-                     concept2words_map=None):
-    probs = None
+def set_expansion(dist_matrix, concept_set, topk=None, concept2words_map=None):
+    matrix = dist_matrix['matrix']
+    max = dist_matrix['max']
 
-    expansion_transition(ground=persona_kws, topk=topk, transition_matrix=kw_graph_distance_matrix,
-                         concept2words_map=concept2words_map)
-
-    # has_persona = persona_kws.sum(-1).clamp(0, 1).unsqueeze(-1)
-    matrix = kw_graph_distance_matrix['matrix']
-    max = kw_graph_distance_matrix['max']
-    # print([id2keyword[i] for i in torch.where(persona_kws[0].eq(1))[0].tolist()])
-    to_persona_matrix = matrix * persona_kws.unsqueeze(1)  # [bs, 2680]
+    to_persona_dist = matrix * concept_set.unsqueeze(1)  # [bs, 2680]
     # mask 后产生 0， 需要将其替换为 max
-    to_persona_matrix = torch.where(to_persona_matrix.eq(0), torch.ones_like(to_persona_matrix) * 100,
-                                    to_persona_matrix)
+    to_persona_dist = torch.where(to_persona_dist.eq(0), torch.ones_like(to_persona_dist) * 100,
+                                  to_persona_dist)
 
-    logits = max - to_persona_matrix.min(dim=-1)[0]
+    to_persona_dist = max - to_persona_dist.min(dim=-1)[0]
 
-    if r is not None:
-        pool = (to_persona_matrix.min(dim=-1)[0] < r) + 0.
-    else:
-        # 去掉 GPT 词典中没有的 concept for attention calculation
-        logits = logits * concept2words_map.sum(-1).ne(0)
-        logits = torch.where(logits.eq(0), torch.ones_like(logits) * -1e10, logits)
+    # 去掉 GPT 词典中没有的 concept for attention calculation
+    to_persona_dist = to_persona_dist * concept2words_map.sum(-1).ne(0)
+    to_persona_dist = torch.where(to_persona_dist.eq(0), torch.ones_like(to_persona_dist) * -1e10, to_persona_dist)
 
-        logits = top_k_logits(logits, topk)
-        probs = softmax(logits)
-        # 精确 topk 个数，for attention calculation
-        pool = torch.scatter(input=torch.zeros_like(probs),
-                             index=probs.topk(topk)[1],
-                             src=torch.ones_like(probs),
-                             dim=-1)
+    to_persona_dist = top_k_logits(to_persona_dist, topk)
+    # 精确 topk 个数，for attention calculation
+    expanded_set = torch.scatter(input=torch.zeros_like(to_persona_dist),
+                                 index=to_persona_dist.topk(topk)[1],
+                                 src=torch.ones_like(to_persona_dist),
+                                 dim=-1)
 
-    # print([id2keyword[i] for i in probs[0].topk(topk)[1].tolist()])
-    # print([id2keyword[i] for i inpersona_pool.tolist()])
-    # persona_pool = probs > 1e-5
-
-    if lower_bound is not None:
-        exceed_lower_bound = (persona_kws.sum(-1) >= lower_bound).unsqueeze(-1)
-        pool = pool * exceed_lower_bound
-    # print([id2keyword[i] for i, j in enumerate(persona_pool[0].tolist()) if j == 1])
-    return pool, probs
+    return expanded_set
 
 
 def cal_lm_word_probs(logits, softmax, temperature=1.0):
@@ -651,13 +565,13 @@ def cal_word2concept_map(dict, device):
     count = 0
     for idx in keys:
         word = tokenizer.decode([idx])
-        if word in keyword2id:
-            map[idx] = keyword2id[word]
+        if word in concept2id:
+            map[idx] = concept2id[word]
             count += 1
         else:
             basic_form_word = kw_format([word])[0]
-            if basic_form_word in keyword2id:
-                map[idx] = keyword2id[basic_form_word]
+            if basic_form_word in concept2id:
+                map[idx] = concept2id[basic_form_word]
                 count += 1
             else:
                 map[idx] = 0
@@ -678,24 +592,6 @@ def cal_concept2word_map(word_concept_map, device):
     # concept_word_mask[0] = 0
     # assert (word_concept_map > 0).sum() == concept_word_mask.sum()
     # return concept_word_mask
-
-
-def load_kw_model(load_kw_prediction_path, device, use_keywords=True):
-    if use_keywords:
-        kw_model = load_kw_prediction_path.split("/")[-1][:-3]  # keyword prediction model name
-        if "GNN" in kw_model:
-            kw_model = "KW_GNN"
-        print("Loading weights from ", load_kw_prediction_path)
-        kw_model_checkpoint = torch.load(load_kw_prediction_path, map_location=device)
-        if "word2id" in kw_model_checkpoint:
-            kw_model_checkpoint.pop("word2id")
-
-        if "model_kwargs" in kw_model_checkpoint:
-            kw_model_kwargs = kw_model_checkpoint.pop("model_kwargs")
-            kw_model = globals()[kw_model](**kw_model_kwargs)
-        kw_model.load_state_dict(kw_model_checkpoint)
-        kw_model.eval()
-        return kw_model.to(device)
 
 
 ## one example for kw model
@@ -727,17 +623,17 @@ def prepare_batch_for_kw_model(obs, device):
     return inputs_for_kw_model
 
 
-def inputs_for_gate_module(tgt_seq, word2concept_map, pool):
+def inputs_for_gate_module(tgt_seq, word2concept_map, concept_set):
     # len_gate_label = len(src) + len(tgt)
     bs = tgt_seq.size(0)
-    pool = torch.gather(input=pool, index=word2concept_map.unsqueeze(0).expand(bs, -1), dim=-1)
+    concept_set = torch.gather(input=concept_set, index=word2concept_map.unsqueeze(0).expand(bs, -1), dim=-1)
 
     gate_label = tgt_seq.clone()
     gate_label[gate_label == 0] = -1
 
     tail = gate_label * gate_label.eq(-1)
 
-    gate_label = torch.gather(input=pool, index=gate_label * gate_label.ne(-1), dim=-1) + 0
+    gate_label = torch.gather(input=concept_set, index=gate_label * gate_label.ne(-1), dim=-1) + 0
     gate_label = gate_label + tail
     # gate_label[gate_label != -1] = (pool.gather(-1, gate_label[gate_label != -1])) + 0
 
@@ -762,7 +658,7 @@ def get_keyword_mask_matrix(device):
     keyword_mask_matrix = torch.from_numpy(
         CN_hopk_graph_dict["edge_mask"]).float().to(device)  # numpy array of (keyword_vocab_size, keyword_vocab_size)
     print("building keyword mask matrix...")
-    keyword_vocab_size = len(keyword2id)
+    keyword_vocab_size = len(concept2id)
     keyword_mask_matrix[torch.arange(keyword_vocab_size).to(device), torch.arange(keyword_vocab_size).to(
         device)] = 0  # remove self loop
     return keyword_mask_matrix
@@ -803,18 +699,18 @@ def extract_concepts(context, max_sent_len):
     tokenized = concept_tokenize(context)
 
     for w in tokenized:
-        if w in keyword2id:
-            concept_id.append(keyword2id[w])
+        if w in concept2id:
+            concept_id.append(concept2id[w])
             continue
         rest.append(w)
 
     basic = concept_to_basic(rest)
 
     for w in basic:
-        if w in keyword2id:
-            concept_id.append(keyword2id[w])
+        if w in concept2id:
+            concept_id.append(concept2id[w])
 
-    concept_id = pad_sentence(concept_id, max_sent_len, keyword2id["<pad>"])
+    concept_id = pad_sentence(concept_id, max_sent_len, concept2id["<pad>"])
 
     return concept_id
 

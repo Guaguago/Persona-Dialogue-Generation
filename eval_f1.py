@@ -41,7 +41,7 @@ if __name__ == '__main__':
     parser = setup_args()
     model_name = setup_trained_weights()
     parser.set_params(
-        datapath='/apdcephfs/share_916081/chencxu/pegg/data',
+        datapath='/apdcephfs/private_chencxu/taiji_inputs/cosplay/data',
         model='agents.transmitter.transmitter:TransformerAgent',
         model_file=model_name,
         gpu=0,

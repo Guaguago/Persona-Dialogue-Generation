@@ -7,7 +7,7 @@
 Uses locking and shared memory when ``numthreads`` is set to >1 to share metrics
 between processes.
 """
-from concept_set_framework import kw_tokenize, keyword2id
+from concept_set_framework import kw_tokenize, concept2id
 from parlai.core.thread_utils import SharedTable
 from parlai.core.utils import round_sigfigs, no_lock
 from collections import Counter
@@ -134,7 +134,7 @@ def _f1_score(guess, answers):
 
 
 def _concept_overlap(concepts, answers):
-    concepts_in_answers = [w for w in kw_tokenize(answers) if w in keyword2id]
+    concepts_in_answers = [w for w in kw_tokenize(answers) if w in concept2id]
     precision, recall, f1 = _prec_recall_f1_score(concepts, concepts_in_answers)
     return recall
 

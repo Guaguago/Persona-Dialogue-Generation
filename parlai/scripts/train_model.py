@@ -28,6 +28,7 @@ import os
 import signal
 import json
 
+from code_structure import LOAD_MODEL
 from parlai.core.agents import create_agent, create_agent_from_shared
 from parlai.core.worlds import create_task
 from parlai.core.params import ParlaiParser
@@ -210,8 +211,8 @@ class TrainLoop():
             trainstats_suffix = '.checkpoint.trainstats'
         # Possibly build a dictionary (not all models do this).
         if (
-            opt['dict_build_first'] and
-            not (opt.get('dict_file') or opt.get('model_file'))
+                opt['dict_build_first'] and
+                not (opt.get('dict_file') or opt.get('model_file'))
         ):
             raise RuntimeError('WARNING: For train_model, please specify either a '
                                'model_file or dict_file.'
@@ -224,6 +225,7 @@ class TrainLoop():
                 opt['dict_file'] = opt['model_file'] + '.dict'
             print("[ building dictionary first... ]")
             build_dict(opt, skip_if_built=True)
+
         # Create model and assign it to the specified task
         self.agent = create_agent(opt)
         self.world = create_task(opt, self.agent)
@@ -242,12 +244,12 @@ class TrainLoop():
             else float('inf')
         self.val_every_n_secs = \
             opt['validation_every_n_secs'] if opt['validation_every_n_secs'] > 0 \
-            else float('inf')
+                else float('inf')
         self.save_every_n_secs = opt['save_every_n_secs'] if opt['save_every_n_secs'] \
-            > 0 else float('inf')
+                                                             > 0 else float('inf')
         self.val_every_n_epochs = \
             opt['validation_every_n_epochs'] if opt['validation_every_n_epochs'] > 0 \
-            else float('inf')
+                else float('inf')
 
         # smart defaults for --validation-metric-mode
         if opt['validation_metric'] in {'loss', 'ppl', 'mean_rank'}:
@@ -274,8 +276,8 @@ class TrainLoop():
         # we may have been preempted, make sure we note that amount
         self._preempted_epochs = 0.0
         if (
-            opt.get('model_file') and
-            os.path.isfile(opt['model_file'] + trainstats_suffix)
+                opt.get('model_file') and
+                os.path.isfile(opt['model_file'] + trainstats_suffix)
         ):
             # looks like we were preempted. make sure we load up our total
             # training stats, etc
@@ -318,8 +320,8 @@ class TrainLoop():
             json.dump({
                 'train_time': self.train_time.time(),
                 'total_epochs': (
-                    self._preempted_epochs +
-                    num_workers() * self.world.get_total_epochs()
+                        self._preempted_epochs +
+                        num_workers() * self.world.get_total_epochs()
                 ),
                 'impatience': self.impatience,
                 'valid_reports': self.valid_reports
@@ -344,9 +346,9 @@ class TrainLoop():
             self.writer.add_metrics('valid', int(self.train_time.time()), valid_report)
         # saving
         if (
-            opt.get('model_file') and
-            opt.get('save_after_valid') and
-            is_primary_worker()
+                opt.get('model_file') and
+                opt.get('save_after_valid') and
+                is_primary_worker()
         ):
             print("[ saving model checkpoint: " +
                   opt['model_file'] + ".checkpoint ]")
@@ -514,8 +516,8 @@ class TrainLoop():
 
                 # get the total training examples done, compute epochs
                 self._total_epochs = (
-                    self._preempted_epochs +
-                    num_workers() * self.world.get_total_epochs()
+                        self._preempted_epochs +
+                        num_workers() * self.world.get_total_epochs()
                 )
                 exs_per_epoch = self.world.num_examples()
                 self._total_exs = int(np.round(self._total_epochs * exs_per_epoch))
@@ -539,8 +541,8 @@ class TrainLoop():
                 if log_time > self.log_every_n_secs:
                     self.log()
                 if (
-                    validate_time > self.val_every_n_secs or
-                    self._total_epochs - self.last_valid_epoch
+                        validate_time > self.val_every_n_secs or
+                        self._total_epochs - self.last_valid_epoch
                         >= self.val_every_n_epochs
                 ):
                     stop_training = self.validate()
@@ -548,9 +550,9 @@ class TrainLoop():
                     if stop_training:
                         break
                 if (
-                    self.save_time.time() > self.save_every_n_secs and
-                    opt.get('model_file') and
-                    is_primary_worker()
+                        self.save_time.time() > self.save_every_n_secs and
+                        opt.get('model_file') and
+                        is_primary_worker()
                 ):
                     print("[ saving model checkpoint: {}.checkpoint".format(
                         opt['model_file']

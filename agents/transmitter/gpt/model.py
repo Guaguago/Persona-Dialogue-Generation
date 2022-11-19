@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from pytorch_pretrained_bert import OpenAIGPTLMHeadModel
 import os
 
-from concept_set_framework import load_kw_model, cal_concept_word_probs, cal_hybrid_word_probs, id2keyword, cal_lm_word_probs, \
+from concept_set_framework import cal_concept_word_probs, cal_hybrid_word_probs, id2keyword, cal_lm_word_probs, \
     cal_concept_word_probs_attention
 
 
@@ -34,8 +34,6 @@ class Gpt2SeqModel(nn.Module):
         self.transformer_module = OpenAIGPTLMHeadModel.from_pretrained('openai-gpt', cache_dir=cache_model_dir,
                                                                        num_special_tokens=special_token_len)
 
-        # idea interface
-        self.kw_model = load_kw_model(opt['datapath'] + '/kw_model/KW_GNN_Commonsense.pt', device)
         self.gate_linear_hidden = nn.Linear(768, 1, bias=True)
         self.gate_linear_concept = nn.Linear(768, 1, bias=True)
         self.softmax = nn.Softmax(dim=-1)

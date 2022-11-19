@@ -3,7 +3,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
+from code_structure import LOAD_CONCEPT_DIST_MATRIX, LOAD_MODEL, LOAD_BATCH, CALCULATE_CONCEPT_SET
 from parlai.core.dict import DictionaryAgent
 from parlai.core.agents import Agent
 from agents.common.dict_helper import SpecialToken
@@ -11,6 +11,7 @@ import random
 import torch
 from torch import optim
 import torch.nn as nn
+from os import path
 
 from collections import deque, defaultdict
 import json
@@ -30,11 +31,9 @@ from agents.common.gpt_dictionary import GPTDictionaryAgent
 
 # idea interface
 from concept_set_framework import prepare_example_for_kw_model, inputs_for_gate_module, prepare_batch_for_kw_model, \
-    cal_word2concept_map, \
-    visualize_samples, cal_concept2word_map, cal_concept_pool, cal_to_persona_pool, cal_context_pool, id2keyword, \
-    cal_middle_pool, cal_final_pool, cal_concept_set
-from concept_set_framework import get_keyword_mask_matrix, get_transition_matrix
-from concept_set_framework import prepare_example_persona_kws, prepare_batch_persona_kw_mask
+    cal_word2concept_map, visualize_samples, cal_concept2word_map, load_concept_dist_matrix, cal_concept_set
+from concept_set_framework import get_keyword_mask_matrix, create_concept_dist_matrix
+from concept_set_framework import prepare_example_persona_kws, prepare_batch_persona_concept_mask
 
 # lstm, transformer, gpt2
 ARCH_CHOICE = 'gpt'
@@ -346,10 +345,15 @@ class TransformerAgent(Agent):
             # idea interface
             self.word2concept_map = cal_word2concept_map(self.dict, self.device)
             self.concept2words_map = cal_concept2word_map(self.word2concept_map, self.device)
-
             self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
-            self.kw_graph_distance_matrix = get_transition_matrix(
-                self.opt['datapath'] + '/concept_net/keyword_graph_weighted_distance_dict.pkl', self.device)
+
+            LOAD_CONCEPT_DIST_MATRIX()  # 1. load matrix if the pkl file exists
+            concept_dist_matrix_pkl = '{}/concept_net/concept_dist_matrix.pkl'.format(self.opt['datapath'])
+            if path.exists(concept_dist_matrix_pkl):
+                self.kw_graph_distance_matrix = load_concept_dist_matrix(concept_dist_matrix_pkl)
+            else:
+                self.kw_graph_distance_matrix = create_concept_dist_matrix(
+                    self.opt['datapath'] + '/concept_net/keyword_graph_weighted_distance_dict.pkl', self.device)
 
             self.id = 'Transformer'
             # we use START markers to start our output
@@ -361,7 +365,7 @@ class TransformerAgent(Agent):
 
             # get vocab size
             vocab_size = len(self.dict.tok2ind.items())
-
+            LOAD_MODEL()
             if ARCH_CHOICE == 'lstm':
                 self.model = Seq2seqModel(opt=opt,
                                           num_features=len(self.dict),
@@ -955,26 +959,26 @@ class TransformerAgent(Agent):
         # valid_inds tells us the indices of all valid examples
         # e.g. for input [{}, {'text': 'hello'}, {}, {}], valid_inds is [1]
         # since the other three elements had no 'text' field
-
+        LOAD_BATCH()
         src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn, labels, valid_inds, cands, valid_cands, sampling_cands, is_training = self.vectorize(
             observations)
 
         # idea
-        persona_kw_mask = prepare_batch_persona_kw_mask(observations, device=self.device)
+        persona_set = prepare_batch_persona_concept_mask(observations, device=self.device)
         data_for_kw_model = prepare_batch_for_kw_model(observations, device=self.device)
         context_concepts = data_for_kw_model['batch_context_keywords']
 
-        final_pool = cal_concept_set(self.opt, context_concepts, persona_kw_mask, self.kw_graph_distance_matrix,
-                                     self.device, data_for_kw_model, self.concept2words_map, self.model.softmax,
-                                     self.kw_mask_matrix, self.model.kw_model)
+        CALCULATE_CONCEPT_SET()
+        concept_set = cal_concept_set(self.opt, context_concepts, persona_set, self.kw_graph_distance_matrix,
+                                      self.device, self.concept2words_map, k=self.opt.get('persona_pool_size'))
 
         # final pool -> gate label
-        data_for_gate = inputs_for_gate_module(tgt_seq, self.word2concept_map, pool=final_pool)
+        data_for_gate = inputs_for_gate_module(tgt_seq, self.word2concept_map, concept_set=concept_set)
 
         idea_dict = {
             'for_kw_model': data_for_kw_model,
             'for_gate_module': data_for_gate,
-            'persona_kw_mask': persona_kw_mask
+            'persona_kw_mask': persona_set
         }
 
         if src_seq is None:
@@ -990,7 +994,7 @@ class TransformerAgent(Agent):
                                                                        cand_inds, sampling_cands, is_training,
                                                                        idea_interface=idea_dict,
                                                                        visualization=self.opt.get('visualization'),
-                                                                       final_pool=final_pool,
+                                                                       final_pool=concept_set,
                                                                        use_attention=use_attention)
 
         if is_training:
