@@ -10,9 +10,9 @@ DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 def setup_task():
     if IS_ORIGINAL:
-        task_name = 'tasks.convai2transmitter.agents:SelfOriginalTeacher'
+        task_name = 'tasks.convai2cosplay.agents:SelfOriginalTeacher'
     else:
-        task_name = 'tasks.convai2transmitter.agents:SelfRevisedTeacher'
+        task_name = 'tasks.convai2cosplay.agents:SelfRevisedTeacher'
     return task_name
 
 

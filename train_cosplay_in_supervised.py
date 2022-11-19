@@ -30,9 +30,9 @@ DATA_DIR = '/apdcephfs/private_chencxu/taiji_inputs/cosplay/data'
 
 def setup_task():
     if IS_ORIGINAL:
-        task_name = 'tasks.convai2transmitter.agents:SelfOriginalTeacher'
+        task_name = 'tasks.convai2cosplay.agents:SelfOriginalTeacher'
     else:
-        task_name = 'tasks.convai2transmitter.agents:SelfRevisedTeacher'
+        task_name = 'tasks.convai2cosplay.agents:SelfRevisedTeacher'
     return task_name
 
 
@@ -90,7 +90,7 @@ def setup_args():
     parser.set_defaults(
         task=task_name,
         rank_candidates=False,
-        # task='tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands',
+        # task='tasks.convai2cosplay.agents:SelfRevisedTeacher:no_cands',
         model='agents.cosplay.cosplay:TransformerAgent',
         datapath=DATA_DIR,
         # =====================

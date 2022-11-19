@@ -40,12 +40,12 @@ def setup_args():
         # receiver_basic = 'receiver_revised'
         transmitter_basic = 'pegg-o'
         exp_task = 'tasks.convai2.agents:OriginalTeacher,tasks.convai2.agents:OriginalPersonaTeacher'
-        exp_eval_task = 'tasks.convai2transmitter.agents:SelfOriginalTeacher:no_cands'
+        exp_eval_task = 'tasks.convai2cosplay.agents:SelfOriginalTeacher:no_cands'
     else:
         # receiver_basic = 'receiver_original'
         transmitter_basic = 'pegg-r'
         exp_task = 'tasks.convai2.agents:RevisedTeacher,tasks.convai2.agents:RevisedPersonaTeacher'
-        exp_eval_task = 'tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands'
+        exp_eval_task = 'tasks.convai2cosplay.agents:SelfRevisedTeacher:no_cands'
 
     exp_name = MODEL_NAME
     validation_max = -1

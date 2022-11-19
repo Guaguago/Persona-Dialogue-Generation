@@ -29,7 +29,7 @@ class SpecialToken:
 def build_transmitter_dict():
     def setup_args():
         parser = ParlaiParser(add_model_args=True, add_parlai_args=True)
-        parser.set_defaults(task='tasks.convai2transmitter.agents:BothTeacher',
+        parser.set_defaults(task='tasks.convai2cosplay.agents:BothTeacher',
                             dict_initpath='../../tmp/dict/init_transmitter.dict',
                             datatype='train',
                             dict_lower=True,
