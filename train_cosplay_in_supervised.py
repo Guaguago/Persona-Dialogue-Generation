@@ -10,11 +10,11 @@ used to achieve the pre-trained model.
 import os
 import random
 import torch
-from agents.transmitter.transmitter import ARCH_CHOICE
+from agents.cosplay.cosplay import ARCH_CHOICE
 from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 
 # Parameters
-MODEL = 'transmitter'
+MODEL = 'cosplay'
 NAME = "cosplay_base"
 IS_ORIGINAL = True
 
@@ -44,7 +44,7 @@ def setup_seed(seed=1706123):
 
 
 def gpt_setting():
-    return 10, 1e-4, 'gpt_custom', 1.0
+    return 2, 1e-4, 'gpt_custom', 1.0
 
 
 def lstm_setting():
@@ -91,7 +91,7 @@ def setup_args():
         task=task_name,
         rank_candidates=False,
         # task='tasks.convai2transmitter.agents:SelfRevisedTeacher:no_cands',
-        model='agents.transmitter.transmitter:TransformerAgent',
+        model='agents.cosplay.cosplay:TransformerAgent',
         datapath=DATA_DIR,
         # =====================
         gen_weight=GEN,
