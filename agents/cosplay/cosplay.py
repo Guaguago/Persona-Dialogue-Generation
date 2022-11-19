@@ -20,11 +20,11 @@ import math
 import pickle
 from agents.receiver.receiver import split_pad_vector
 # basic setting, we should make it easy to convert from basic setting into gpt/bert setting
-from agents.transmitter.utils import maintain_dialog_history, PaddingUtils, round_sigfigs
-from agents.transmitter.utils import SharedTable
-from agents.transmitter.utils import modelzoo_path
-from agents.transmitter.gpt.loss import LabelSmoothingLoss, TokenCrossEntropyLoss
-from agents.transmitter.seq2seq.model import Seq2seqModel
+from agents.cosplay.utils import maintain_dialog_history, PaddingUtils, round_sigfigs
+from agents.cosplay.utils import SharedTable
+from agents.cosplay.utils import modelzoo_path
+from agents.cosplay.gpt.loss import LabelSmoothingLoss, TokenCrossEntropyLoss
+from agents.cosplay.seq2seq.model import Seq2seqModel
 from .gpt.model import Gpt2SeqModel
 from .gpt.optim import GPTOptimizer
 from agents.common.gpt_dictionary import GPTDictionaryAgent

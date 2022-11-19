@@ -10,7 +10,7 @@ import torch.nn as nn
 from torch.nn.parameter import Parameter
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 import torch.nn.functional as F
-from agents.transmitter.utils import Beam
+from agents.cosplay.utils import Beam
 import os
 
 
