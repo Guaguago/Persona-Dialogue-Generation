@@ -14,7 +14,6 @@ from agents.cosplay.cosplay import ARCH_CHOICE
 from parlai.scripts.train_model import setup_args as setup_dict_args, TrainLoop
 
 # Parameters
-MODEL = 'cosplay'
 NAME = "cosplay_base"
 IS_ORIGINAL = True
 
@@ -24,7 +23,7 @@ PERSONA_LOWER_BOUND = 0
 CONTEXT_LOWER_BOUND = 0
 USE_ATTENTION = True
 BEAM_SIZE = 2
-MODEL_DIR = '/apdcephfs/private_chencxu/taiji_outputs/model'
+MODEL_DIR = '/apdcephfs/private_chencxu/taiji_outputs/cosplay/models/supervised'
 DATA_DIR = '/apdcephfs/private_chencxu/taiji_inputs/cosplay/data'
 
 
@@ -102,7 +101,7 @@ def setup_args():
         context_lower_bound=CONTEXT_LOWER_BOUND,
         use_attention=USE_ATTENTION,
         # ======================
-        model_file='{}/{}/{}.model'.format(MODEL_DIR, MODEL, exp_name),
+        model_file='{}/{}.model'.format(MODEL_DIR, exp_name),
         dict_tokenizer='split',
         datatype='train',
         gpt_lr=6.25e-5,

@@ -25,7 +25,7 @@ from parlai.agents.local_human.local_human import LocalHumanAgent
 import random
 import os
 
-pretrained_model_file = './tmp/psquare/psqaure_original.model'
+pretrained_model_file = './tmp/cosplay_rl/psqaure_original.model'
 
 
 def setup_args(parser=None):

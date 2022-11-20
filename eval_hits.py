@@ -4,7 +4,7 @@ IS_ORIGINAL = True
 
 
 
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-42/psquare/rl-o-7.model'
+MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-42/cosplay_rl/rl-o-7.model'
 DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
 
 

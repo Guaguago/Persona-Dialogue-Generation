@@ -6,37 +6,39 @@ from copy import deepcopy
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+from code_structure import LOAD_CONCEPT_DIST_MATRIX, CALCULATE_CONCEPT_SET, COSPLAY_PRED
 from parlai.core.agents import Agent, create_agent
 from parlai.core.dict import DictionaryAgent
 from parlai.core.thread_utils import SharedTable
-from agents.transmitter.transmitter import ARCH_CHOICE
-from agents.transmitter.transmitter import GPTDictionaryAgent, Gpt2SeqModel
-from agents.transmitter.utils import maintain_dialog_history, PaddingUtils, round_sigfigs
-from agents.transmitter.seq2seq.model import Seq2seqModel
+from agents.cosplay.cosplay import ARCH_CHOICE
+from agents.cosplay.cosplay import GPTDictionaryAgent, Gpt2SeqModel
+from agents.cosplay.utils import maintain_dialog_history, PaddingUtils, round_sigfigs
+from agents.cosplay.seq2seq.model import Seq2seqModel
 from torch.optim import SGD, lr_scheduler, Adagrad
 from agents.receiver.receiver import ReceiverEncoder, split_pad_vector, split_pad_vector_for_bug
-from agents.psquare.utils import prepare_for_understand
+from agents.cosplay_rl.utils import prepare_for_understand
 from agents.common.dict_helper import SpecialToken
-from agents.transmitter.gpt.loss import TokenCrossEntropyLoss
-from agents.transmitter.gpt.optim import GPTOptimizer
+from agents.cosplay.gpt.loss import TokenCrossEntropyLoss
+from agents.cosplay.gpt.optim import GPTOptimizer
 # import pysnooper
 from torch import autograd
+from os import path
+
 import json
-from agents.psquare.utils import LanguageModel
-from ground_transition import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_map, \
-    cal_context_pool, \
-    cal_middle_pool, cal_to_persona_pool, inputs_for_gate_module, cal_final_pool, cal_expanded_ground
-from ground_transition import prepare_batch_persona_kw_mask, prepare_batch_for_kw_model
-from ground_transition import cal_word2concept_map, get_keyword_mask_matrix, get_transition_matrix
-from ground_transition import cal_kw_logits, cal_next_pool, cal_persona_pool
-from ground_transition import cal_finding_common_ground_score
+from agents.cosplay_rl.utils import LanguageModel
+from concept_set_framework import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_map, \
+    cal_context_set, cal_concept_set, load_concept_dist_matrix, create_concept_dist_matrix
+from concept_set_framework import prepare_batch_persona_concept_mask, prepare_batch_for_kw_model
+from concept_set_framework import cal_word2concept_map, get_keyword_mask_matrix
+from concept_set_framework import cal_finding_common_ground_score
 import torch.nn as nn
 
 task_key_word = 'OriginalPersonaTeacher'
 
 
 def _setup_op(opt, component):
-    assert component in ['transmitter', 'receiver']
+    assert component in ['cosplay', 'receiver']
     new_opt = deepcopy(opt)
     for k, v in opt.items():
         if k.endswith(component):
@@ -68,7 +70,7 @@ def _init_receiver(opt):
     return receiver_agent.encoder, receiver_agent.dict
 
 
-class PSquareAgent(Agent):
+class CosplayRLAgent(Agent):
     @staticmethod
     def dictionary_class():
         if 'gpt' in ARCH_CHOICE:
@@ -80,79 +82,79 @@ class PSquareAgent(Agent):
     def add_cmdline_args(argparser):
         """Specific arguments for this agent"""
         agent = argparser.add_argument_group('DSquare Arguments')
-        agent.add_argument('--init-model-transmitter', type=str, default=None,
-                           help='Load weights from pre-trained transmitter')
+        agent.add_argument('--init-model-cosplay', type=str, default=None,
+                           help='Load weights from pre-trained cosplay')
         agent.add_argument('--init-model-receiver', type=str, default=None,
                            help='Load weights from pre-trained receiver')
         # agent.add_argument('--history-replies', default=None)
 
-        # transmitter argument
-        agent.add_argument('-bzt', '--batchsize-transmitter')
-        agent.add_argument('-lrt', '--lr-transmitter')
+        # cosplay argument
+        agent.add_argument('-bzt', '--batchsize-cosplay')
+        agent.add_argument('-lrt', '--lr-cosplay')
         agent.add_argument('--gradient-clip', type=float, default=5.0)
         agent.add_argument('-rnn', '--rnn-class', default='lstm',
                            choices=Seq2seqModel.RNN_OPTS.keys(),
                            help='Choose between different types of RNNs.')
-        agent.add_argument('-ehst', '--encoder-hidden-size-transmitter', type=int, default=1024,
+        agent.add_argument('-ehst', '--encoder-hidden-size-cosplay', type=int, default=1024,
                            help='size of the hidden layers')
-        agent.add_argument('-dhst', '--decoder-hidden-size-transmitter', type=int, default=1024,
+        agent.add_argument('-dhst', '--decoder-hidden-size-cosplay', type=int, default=1024,
                            help='size of the hidden layers')
 
-        agent.add_argument('-eeszt', '--encoder-embed-dim-transmitter', type=int, default=300,
+        agent.add_argument('-eeszt', '--encoder-embed-dim-cosplay', type=int, default=300,
                            help='size of the token embeddings')
-        agent.add_argument('-deszt', '--decoder-embed-dim-transmitter', type=int, default=300,
+        agent.add_argument('-deszt', '--decoder-embed-dim-cosplay', type=int, default=300,
                            help='size of the token embeddings')
 
-        agent.add_argument('-enlt', '--encoder-layers-transmitter', type=int, default=2,
+        agent.add_argument('-enlt', '--encoder-layers-cosplay', type=int, default=2,
                            help='number of hidden layers')
-        agent.add_argument('-dnlt', '--decoder-layers-transmitter', type=int, default=2,
+        agent.add_argument('-dnlt', '--decoder-layers-cosplay', type=int, default=2,
                            help='number of hidden layers')
 
-        agent.add_argument('--rnn-share-transmitter', default=False)
+        agent.add_argument('--rnn-share-cosplay', default=False)
 
-        agent.add_argument('--dropout-transmitter', type=float, default=0.1,
+        agent.add_argument('--dropout-cosplay', type=float, default=0.1,
                            help='dropout rate')
-        agent.add_argument('--encoder-dropout-in-transmitter', type=float, default=0.1,
+        agent.add_argument('--encoder-dropout-in-cosplay', type=float, default=0.1,
                            help='dropout rate')
-        agent.add_argument('--encoder-dropout-out-transmitter', type=float, default=0.1,
+        agent.add_argument('--encoder-dropout-out-cosplay', type=float, default=0.1,
                            help='dropout rate')
-        agent.add_argument('--decoder-dropout-in-transmitter', type=float, default=0.1,
+        agent.add_argument('--decoder-dropout-in-cosplay', type=float, default=0.1,
                            help='dropout rate')
-        agent.add_argument('--decoder-dropout-out-transmitter', type=float, default=0.1,
+        agent.add_argument('--decoder-dropout-out-cosplay', type=float, default=0.1,
                            help='dropout rate')
-        agent.add_argument('--share-decoder-input-output-embed-transmitter', type=bool, default=True)
+        agent.add_argument('--share-decoder-input-output-embed-cosplay', type=bool, default=True)
 
-        agent.add_argument('-bit', '--encoder-bidirectional-transmitter', type='bool',
+        agent.add_argument('-bit', '--encoder-bidirectional-cosplay', type='bool',
                            default=False,
                            help='whether to encode the context with a '
                                 'bidirectional rnn')
-        agent.add_argument('-attt', '--decoder-attention-transmitter', default='general',
+        agent.add_argument('-attt', '--decoder-attention-cosplay', default='general',
                            choices=['none', 'concat', 'general', 'dot', 'local'],
                            help='Choices: none, concat, general, local. '
                                 'If set local, also set attention-length. '
                                 '(see arxiv.org/abs/1508.04025)')
-        agent.add_argument('-attlt', '--attention-length-transmitter', default=48, type=int,
+        agent.add_argument('-attlt', '--attention-length-cosplay', default=48, type=int,
                            help='Length of local attention.')
-        agent.add_argument('--attention-time-transmitter', default='post',
+        agent.add_argument('--attention-time-cosplay', default='post',
                            choices=['pre', 'post'],
                            help='Whether to apply attention before or after '
                                 'decoding.')
-        agent.add_argument('-rct', '--rank-candidates-transmitter', type='bool',
+        agent.add_argument('-rct', '--rank-candidates-cosplay', type='bool',
                            default=False,
                            help='rank candidates if available. this is done by'
                                 ' computing the prob score per token for each '
                                 'candidate and selecting the highest scoring.')
-        agent.add_argument('-rnnt', '--rnn-class-transmitter', default='lstm',
+        agent.add_argument('-rnnt', '--rnn-class-cosplay', default='lstm',
                            choices=Seq2seqModel.RNN_OPTS.keys(),
                            help='Choose between different types of RNNs.')
-        agent.add_argument('-dect', '--decoder-transmitter', default='same',
+        agent.add_argument('-dect', '--decoder-cosplay', default='same',
                            choices=['same', 'shared'],
                            help='Choose between different decoder modules. '
                                 'Default "same" uses same class as encoder, '
                                 'while "shared" also uses the same weights. '
                                 'Note that shared disabled some encoder '
                                 'options--in particular, bidirectionality.')
-        agent.add_argument('-ltt', '--lookuptable-transmitter', default='unique',
+        agent.add_argument('-ltt', '--lookuptable-cosplay', default='unique',
                            choices=['unique', 'enc_dec', 'dec_out', 'all'],
                            help='The encoder, decoder, and output modules can '
                                 'share weights, or not. '
@@ -162,7 +164,7 @@ class PSquareAgent(Agent):
                                 'Dec_out shares decoder embedding and output '
                                 'weights. '
                                 'All shares all three weights.')
-        agent.add_argument('-embt', '--embedding-type-transmitter', default='random',
+        agent.add_argument('-embt', '--embedding-type-cosplay', default='random',
                            choices=['random', 'glove', 'glove-fixed',
                                     'fasttext', 'fasttext-fixed',
                                     'glove-twitter'],
@@ -172,11 +174,11 @@ class PSquareAgent(Agent):
                                 'Fasttext.'
                                 'Preinitialized embeddings can also be fixed '
                                 'so they are not updated during training.')
-        agent.add_argument('-softt', '--numsoftmax-transmitter', default=1, type=int,
+        agent.add_argument('-softt', '--numsoftmax-cosplay', default=1, type=int,
                            help='default 1, if greater then uses mixture of '
                                 'softmax (see arxiv.org/abs/1711.03953).')
-        agent.add_argument('-optr', '--optimizer-transmitter', default='gpt2_custom')
-        agent.add_argument('-beam', '--beam-size-transmitter', default=1, help='transmitter beam size')
+        agent.add_argument('-optr', '--optimizer-cosplay', default='gpt2_custom')
+        agent.add_argument('-beam', '--beam-size-cosplay', default=1, help='cosplay beam size')
         agent.add_argument('--encoder_dis_use', type=bool, default=False,
                            help='add distance state embedding')
         agent.add_argument('--encoder_turn_use', type=bool, default=False,
@@ -290,7 +292,7 @@ class PSquareAgent(Agent):
         agent.add_argument('--dict_file', default='../../tmp/dict/convai2_self_seq2seq_model.dict')
         agent.add_argument('--dict_lower', type=bool, default=True)
 
-        PSquareAgent.dictionary_class().add_cmdline_args(argparser)
+        CosplayRLAgent.dictionary_class().add_cmdline_args(argparser)
         return agent
 
     def __init__(self, opt, shared=None):
@@ -307,7 +309,7 @@ class PSquareAgent(Agent):
         self.greedy_response = None
 
         self.persona_receiver = None  # text list which describes the agent's persona
-        self.persona_transmitter = None  # text list which is used by transmitter
+        self.persona_cosplay = None  # text list which is used by cosplay
         self.send_messages, self.receive_messages = [], []  # for receiver to extract persona
 
         self.encode_max_seq_len = opt['encode_max_seq_len'] if opt['encode_max_seq_len'] > 0 else None
@@ -360,9 +362,9 @@ class PSquareAgent(Agent):
             # answers contains a batch_size list of the last answer produced
             self.answers = shared['answers']
 
-            # if 'transmitter' in shared:
+            # if 'cosplay' in shared:
             # model is shared during hogwild
-            self.transmitter = shared['transmitter']
+            self.cosplay = shared['cosplay']
             self.metrics = shared['metrics']
             # TODO: share status
             # self.receiver = shared['receiver']
@@ -389,8 +391,14 @@ class PSquareAgent(Agent):
             self.concept2words_map = cal_concept2word_map(self.word2concept_map, self.device)
 
             self.kw_mask_matrix = get_keyword_mask_matrix(self.device)
-            self.kw_graph_distance_matrix = get_transition_matrix(
-                self.opt['datapath'] + '/concept_net/keyword_graph_weighted_distance_dict.pkl', self.device)
+
+            LOAD_CONCEPT_DIST_MATRIX()  # 1. load matrix if the pkl file exists
+            concept_dist_matrix_pkl = '{}/concept_net/concept_dist_matrix.pkl'.format(self.opt['datapath'])
+            if path.exists(concept_dist_matrix_pkl):
+                self.kw_graph_distance_matrix = load_concept_dist_matrix(concept_dist_matrix_pkl)
+            else:
+                self.kw_graph_distance_matrix = create_concept_dist_matrix(
+                    self.opt['datapath'] + '/concept_net/keyword_graph_weighted_distance_dict.pkl', self.device)
 
             # we use START markers to start our output
             self.START_IDX = self.dict[self.dict.start_token]
@@ -399,12 +407,12 @@ class PSquareAgent(Agent):
             # get index of null token from dictionary (probably 0)
             self.NULL_IDX = self.dict[self.dict.null_token]
 
-            transmitter_status, receiver_status, language_status = {}, {}, {}
+            cosplay_status, receiver_status, language_status = {}, {}, {}
 
             # model initialization
-            init_transmitter, init_receiver = None, None
-            if opt.get('init_model_transmitter') and os.path.isfile(opt['init_model_transmitter']):
-                init_transmitter = opt['init_model_transmitter']
+            init_cosplay, init_receiver = None, None
+            if opt.get('init_model_cosplay') and os.path.isfile(opt['init_model_cosplay']):
+                init_cosplay = opt['init_model_cosplay']
             if opt.get('init_model_receiver') and os.path.isfile(opt['init_model_receiver']):
                 init_receiver = opt['init_model_receiver']
 
@@ -412,30 +420,30 @@ class PSquareAgent(Agent):
                 print('[ Loading receiver from {} ]'.format(init_receiver))
                 receiver_status = self.load(init_receiver)
 
-            if init_transmitter is not None:
-                print('[ Loading transmitter from {} ]'.format(init_transmitter))
-                transmitter_status = self.load(init_transmitter)
+            if init_cosplay is not None:
+                print('[ Loading cosplay from {} ]'.format(init_cosplay))
+                cosplay_status = self.load(init_cosplay)
 
-            # transmitter_opt = _setup_op(opt, component='transmitter')
+            # cosplay_opt = _setup_op(opt, component='cosplay')
 
             if ARCH_CHOICE == 'lstm':
-                self.transmitter = Seq2seqModel(opt=self.opt,
-                                                num_features=len(self.dict),
-                                                padding_idx=self.NULL_IDX,
-                                                start_idx=self.START_IDX,
-                                                end_idx=self.END_IDX,
-                                                longest_label=transmitter_status.get('longest_label', 1))
+                self.cosplay = Seq2seqModel(opt=self.opt,
+                                            num_features=len(self.dict),
+                                            padding_idx=self.NULL_IDX,
+                                            start_idx=self.START_IDX,
+                                            end_idx=self.END_IDX,
+                                            longest_label=cosplay_status.get('longest_label', 1))
             elif ARCH_CHOICE == 'gpt':
                 assert isinstance(self.dict, GPTDictionaryAgent)
-                self.transmitter = Gpt2SeqModel(opt=self.opt,
-                                                vocab_size=len(self.dict),
-                                                pad_idx=self.NULL_IDX,
-                                                start_idx=self.START_IDX,
-                                                end_idx=self.END_IDX,
-                                                dict=self.dict,
-                                                special_token_len=len(self.dict.special_tokens),
-                                                longest_label=transmitter_status.get('longest_label', 1),
-                                                device=self.device)
+                self.cosplay = Gpt2SeqModel(opt=self.opt,
+                                            vocab_size=len(self.dict),
+                                            pad_idx=self.NULL_IDX,
+                                            start_idx=self.START_IDX,
+                                            end_idx=self.END_IDX,
+                                            dict=self.dict,
+                                            special_token_len=len(self.dict.special_tokens),
+                                            longest_label=cosplay_status.get('longest_label', 1),
+                                            device=self.device)
 
             if opt.get('init_model_coherent') and os.path.isfile(opt['init_model_coherent']):
                 init_language = opt['init_model_coherent']
@@ -467,8 +475,8 @@ class PSquareAgent(Agent):
 
             self.language_model = LanguageModel(pad_idx=self.NULL_IDX)
 
-            if transmitter_status:
-                self.transmitter.load_state_dict(transmitter_status['model'])
+            if cosplay_status:
+                self.cosplay.load_state_dict(cosplay_status['model'])
             if receiver_status:
                 self.receiver.load_state_dict(receiver_status['model'])
                 # do not calculate gradient
@@ -476,7 +484,7 @@ class PSquareAgent(Agent):
 
             if self.use_cuda:
                 print('[ Using CUDA ]')
-                self.transmitter.cuda()
+                self.cosplay.cuda()
                 self.coherent_model.cuda("cuda:1")
                 self.language_model.cuda('cuda:1')
                 self.device = torch.device('cuda')
@@ -493,23 +501,23 @@ class PSquareAgent(Agent):
             self.criterion = self.criterion.cuda()
 
         if 'lstm' in ARCH_CHOICE:
-            self.transmitter_optimizer = Adagrad(self.transmitter.parameters(),
-                                                 opt.get('lr', 1e-3))  # TODO: other optimizer
+            self.cosplay_optimizer = Adagrad(self.cosplay.parameters(),
+                                             opt.get('lr', 1e-3))  # TODO: other optimizer
         elif 'gpt' in ARCH_CHOICE:
-            self.transmitter_optimizer = GPTOptimizer(self.transmitter, self.opt)
+            self.cosplay_optimizer = GPTOptimizer(self.cosplay, self.opt)
         else:
             raise Exception("Not support for ARCH")
 
-        self.super_optimizer = SGD(params=self.transmitter.parameters(),
+        self.super_optimizer = SGD(params=self.cosplay.parameters(),
                                    lr=opt.get('lr', 1e-2))
 
-        if not isinstance(self.transmitter_optimizer, GPTOptimizer):
+        if not isinstance(self.cosplay_optimizer, GPTOptimizer):
             self.scheduler = lr_scheduler.ReduceLROnPlateau(
-                self.transmitter_optimizer, 'min', factor=0.5, patience=3, verbose=True)  # TODO: schedule
+                self.cosplay_optimizer, 'min', factor=0.5, patience=3, verbose=True)  # TODO: schedule
 
         self.reset()
         # zero gradient for update
-        self.transmitter_optimizer.zero_grad()
+        self.cosplay_optimizer.zero_grad()
         self.super_optimizer.zero_grad()
 
     def override_opt(self, new_opt):
@@ -524,7 +532,7 @@ class PSquareAgent(Agent):
                       'rank_candidates', 'log_every_n_secs',
                       'dict_maxexs', 'decode_max_seq_len',
                       'encode_max_seq_len', 'lr', 'dict_lower', 'exp', 'train_report_metrics', 'starttime',
-                      'gradient_clip', 'init_model_transmitter ', 'optimizer_step'}
+                      'gradient_clip', 'init_model_cosplay ', 'optimizer_step'}
         for k, v in new_opt.items():
             # override ones
             if k in model_args and k in self.opt:
@@ -564,8 +572,8 @@ class PSquareAgent(Agent):
         if type(self.metrics) == dict:
             # move metrics and model to shared memory
             self.metrics = SharedTable(self.metrics)
-            self.transmitter.share_memory()
-        shared['transmitter'] = self.transmitter
+            self.cosplay.share_memory()
+        shared['cosplay'] = self.cosplay
         shared['metrics'] = self.metrics
         shared['states'] = {  # don't share optimizer states
             'optimizer_type': self.opt.get('optimizer', None),
@@ -596,7 +604,7 @@ class PSquareAgent(Agent):
         self.is_first_speaker = None
         self.greedy_response = None
         self.persona_receiver = None
-        self.persona_transmitter = None
+        self.persona_cosplay = None
         self.history = [{} for _ in range(self.batch_size)]
         self.log_probs = []
         self.send_messages = []
@@ -674,28 +682,29 @@ class PSquareAgent(Agent):
     def batch_act(self, observations):
         # DEBUG track gpu
         reply = [{'id': self.getID(), 'episode_done': False} for _ in range(self.batch_size)]
-        src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn, labels, valid_inds, cands, valid_cands, is_training = self.transmitter_vectorize(
+        src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn, labels, valid_inds, cands, valid_cands, is_training = self.cosplay_vectorize(
             observations)
 
         # idea interface
-        persona_kw_mask = prepare_batch_persona_kw_mask(observations, device=self.device)
+        persona_set = prepare_batch_persona_concept_mask(observations, device=self.device)
         data_for_kw_model = prepare_batch_for_kw_model(observations, device=self.device)
         context_concepts = data_for_kw_model['batch_context_keywords']
 
-        final_pool = cal_expanded_ground(self.opt, context_concepts, persona_kw_mask, self.kw_graph_distance_matrix,
-                                    self.device, data_for_kw_model, self.concept2words_map, self.transmitter.softmax,
-                                    self.kw_mask_matrix, self.transmitter.kw_model)
+        CALCULATE_CONCEPT_SET()
+        concept_set = cal_concept_set(self.opt, context_concepts, persona_set, self.kw_graph_distance_matrix,
+                                      self.device, self.concept2words_map, k=self.opt.get('persona_pool_size'))
 
         cand_inds = [i[0] for i in valid_cands] if valid_cands is not None else None
 
         use_attention = self.opt.get('use_attention')
 
-        predictions, cand_preds = self.transmitter_predict(src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn,
-                                                           cands, cand_inds, is_training,
-                                                           data_for_kw_model=data_for_kw_model,
-                                                           persona_kw_mask=persona_kw_mask,
-                                                           final_pool=final_pool,
-                                                           use_attention=use_attention)
+        COSPLAY_PRED()
+        predictions, cand_preds = self.cosplay_predict(src_seq, src_seq_turn, src_seq_dis, tgt_seq, tgt_seq_turn,
+                                                       cands, cand_inds, is_training,
+                                                       data_for_kw_model=data_for_kw_model,
+                                                       persona_kw_mask=persona_set,
+                                                       final_pool=concept_set,
+                                                       use_attention=use_attention)
 
         if self.is_training:
             report_freq = 0
@@ -738,7 +747,7 @@ class PSquareAgent(Agent):
             # preprocess text in observations, replace candidates persona into another tagging
             for ob_ind, ob in enumerate(obs):
                 if ob.get('text', False):
-                    # TODO: not consistent with transmitter
+                    # TODO: not consistent with cosplay
                     text_split = ob['text'].lower().split('\n')
                     persona_given = ''
                     for t in text_split:
@@ -773,7 +782,7 @@ class PSquareAgent(Agent):
                         persona_text = ' '.join(split_persona)
                         if self.use_person_tokens:
                             persona_text = SpecialToken.persona_start + ' ' + persona_text + ' ' + SpecialToken.persona_end
-                        self.persona_transmitter = persona_text
+                        self.persona_cosplay = persona_text
                     ob['persona'] = persona_given
                     # idea interface
                     ob['persona_kws'] = prepare_example_persona_kws(self.history[ob_ind], persona_given)
@@ -838,10 +847,10 @@ class PSquareAgent(Agent):
 
         return self.observation
 
-    def transmitter_predict(self, src_seq, src_seq_turn, src_seq_dis, tgt_seq=None, tgt_seq_turn=None, cands=None,
-                            valid_cands=None, is_training=False, data_for_kw_model=None, persona_kw_mask=None,
-                            final_pool=None, use_attention=None, visualization=False):
-        """Produce a prediction from our transmitter.
+    def cosplay_predict(self, src_seq, src_seq_turn, src_seq_dis, tgt_seq=None, tgt_seq_turn=None, cands=None,
+                        valid_cands=None, is_training=False, data_for_kw_model=None, persona_kw_mask=None,
+                        final_pool=None, use_attention=None, visualization=False):
+        """Produce a prediction from our cosplay.
 
         Keep track of gradients if is_training
         """
@@ -849,26 +858,26 @@ class PSquareAgent(Agent):
         predictions, cand_preds = None, None
 
         # idea interface: for both train and generation codes.
-        # kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, self.kw_mask_matrix, self.transmitter.kw_model)
+        # kw_logits, kw_hidden_states = cal_kw_logits(data_for_kw_model, self.kw_mask_matrix, self.cosplay.kw_model)
         # walk_probs = cal_next_pool(kw_logits, self.kw_mask_matrix,
-        #                            data_for_kw_model['batch_context_keywords'], self.transmitter.softmax)
-        # jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.transmitter.softmax)
+        #                            data_for_kw_model['batch_context_keywords'], self.cosplay.softmax)
+        # jump_probs = cal_persona_pool(self.kw_graph_distance_matrix, persona_kw_mask, self.cosplay.softmax)
         # hybrid_weights = self.opt['hybrid_weights']
 
         if is_training:
-            self.transmitter.train()
+            self.cosplay.train()
             try:
                 if tgt_seq is not None:
-                    out = self.transmitter.forward(src_seq=src_seq,
-                                                   src_seq_turn=src_seq_turn,
-                                                   src_seq_dis=src_seq_dis,
-                                                   tgt_seq=tgt_seq,
-                                                   tgt_seq_turn=tgt_seq_turn,
-                                                   word2concept_map=self.word2concept_map,
-                                                   concept2words_map=self.concept2words_map,
-                                                   final_pool=final_pool,
-                                                   visualization=visualization,
-                                                   use_attention=use_attention)
+                    out = self.cosplay.forward(src_seq=src_seq,
+                                               src_seq_turn=src_seq_turn,
+                                               src_seq_dis=src_seq_dis,
+                                               tgt_seq=tgt_seq,
+                                               tgt_seq_turn=tgt_seq_turn,
+                                               word2concept_map=self.word2concept_map,
+                                               concept2words_map=self.concept2words_map,
+                                               final_pool=final_pool,
+                                               visualization=visualization,
+                                               use_attention=use_attention)
                     predictions, hybrid_probs, cand_preds, gate = out[0], out[1], out[2], out[4]
                     # idx = predictions.unsqueeze(dim=2)
                     # loss = self.criterion(scores, idx)
@@ -886,26 +895,26 @@ class PSquareAgent(Agent):
                     # loss /= target_tokens  # average loss per token
                     gen_loss.backward()
                 elif self.greedy_response is True:  # 2pegg B
-                    out = self.transmitter.forward(src_seq=src_seq,
-                                                   src_seq_turn=src_seq_turn,
-                                                   src_seq_dis=src_seq_dis,
-                                                   sampling=False,
-                                                   word2concept_map=self.word2concept_map,
-                                                   concept2words_map=self.concept2words_map,
-                                                   final_pool=final_pool,
-                                                   use_attention=use_attention)
+                    out = self.cosplay.forward(src_seq=src_seq,
+                                               src_seq_turn=src_seq_turn,
+                                               src_seq_dis=src_seq_dis,
+                                               sampling=False,
+                                               word2concept_map=self.word2concept_map,
+                                               concept2words_map=self.concept2words_map,
+                                               final_pool=final_pool,
+                                               use_attention=use_attention)
                     # generated response
                     predictions, hybrid_probs, cand_preds = out[0], out[1], out[2]
                     self.metrics['num_selfplay_turns'] += 1
                 else:  # 2pegg for A sampling
-                    out = self.transmitter.forward(src_seq=src_seq,
-                                                   src_seq_turn=src_seq_turn,
-                                                   src_seq_dis=src_seq_dis,
-                                                   sampling=True,
-                                                   word2concept_map=self.word2concept_map,
-                                                   concept2words_map=self.concept2words_map,
-                                                   final_pool=final_pool,
-                                                   use_attention=use_attention)
+                    out = self.cosplay.forward(src_seq=src_seq,
+                                               src_seq_turn=src_seq_turn,
+                                               src_seq_dis=src_seq_dis,
+                                               sampling=True,
+                                               word2concept_map=self.word2concept_map,
+                                               concept2words_map=self.concept2words_map,
+                                               final_pool=final_pool,
+                                               use_attention=use_attention)
                     # generated response
                     predictions, hybrid_probs, cand_preds = out[0], out[1], out[2]
                     idx = predictions.unsqueeze(dim=2)
@@ -935,31 +944,31 @@ class PSquareAgent(Agent):
                     raise e
         else:
             with torch.no_grad():
-                self.transmitter.eval()
-                out = self.transmitter.forward(src_seq=src_seq,
+                self.cosplay.eval()
+                out = self.cosplay.forward(src_seq=src_seq,
+                                           src_seq_turn=src_seq_turn,
+                                           src_seq_dis=src_seq_dis,
+                                           rank_during_training=cands is not None,
+                                           cands=cands,
+                                           valid_cands=valid_cands,
+                                           word2concept_map=self.word2concept_map,
+                                           concept2words_map=self.concept2words_map,
+                                           final_pool=final_pool,
+                                           use_attention=use_attention)
+                predictions, cand_preds = out[0], out[2]
+                if tgt_seq is not None:
+                    # calculate loss on targets
+                    out = self.cosplay.forward(src_seq=src_seq,
                                                src_seq_turn=src_seq_turn,
                                                src_seq_dis=src_seq_dis,
-                                               rank_during_training=cands is not None,
+                                               tgt_seq=tgt_seq,
+                                               tgt_seq_turn=tgt_seq_turn,
                                                cands=cands,
                                                valid_cands=valid_cands,
                                                word2concept_map=self.word2concept_map,
                                                concept2words_map=self.concept2words_map,
                                                final_pool=final_pool,
                                                use_attention=use_attention)
-                predictions, cand_preds = out[0], out[2]
-                if tgt_seq is not None:
-                    # calculate loss on targets
-                    out = self.transmitter.forward(src_seq=src_seq,
-                                                   src_seq_turn=src_seq_turn,
-                                                   src_seq_dis=src_seq_dis,
-                                                   tgt_seq=tgt_seq,
-                                                   tgt_seq_turn=tgt_seq_turn,
-                                                   cands=cands,
-                                                   valid_cands=valid_cands,
-                                                   word2concept_map=self.word2concept_map,
-                                                   concept2words_map=self.concept2words_map,
-                                                   final_pool=final_pool,
-                                                   use_attention=use_attention)
                     # scores = out[1]
                     # loss = self.criterion(scores, tgt_seq)
                     hybrid_probs = out[1]
@@ -973,7 +982,7 @@ class PSquareAgent(Agent):
         torch.cuda.empty_cache()
         return predictions, cand_preds
 
-    def transmitter_vectorize(self, observations):
+    def cosplay_vectorize(self, observations):
         """Convert a list of observations into input & target tensors."""
         is_training = self.is_training
 
@@ -1042,14 +1051,14 @@ class PSquareAgent(Agent):
     def update_selfplay(self):
         """Update component given self-play agents' experience(gradient)"""
         # print("Before Clear Self Gradient: {}".format(
-        # str(self.transmitter.transformer_module.lm_head.decoder.weight.grad)))
-        self.transmitter_optimizer.step()
-        self.transmitter_optimizer.zero_grad()
+        # str(self.cosplay.transformer_module.lm_head.decoder.weight.grad)))
+        self.cosplay_optimizer.step()
+        self.cosplay_optimizer.zero_grad()
 
     def update_supervised(self):
         """Update component given self-play agents' experience(gradient)"""
         # print("Before Clear Self Gradient: {}".format(
-        # str(self.transmitter.transformer_module.lm_head.decoder.weight.grad)))
+        # str(self.cosplay.transformer_module.lm_head.decoder.weight.grad)))
         self.super_optimizer.step()
         self.super_optimizer.zero_grad()
 
@@ -1109,7 +1118,7 @@ class PSquareAgent(Agent):
 
         batch_obs = [{'text': '', 'labels': ['']} for _ in range(len(send_messages_list[0]))]
         # prepend self persona into the dialogue history
-        batch_history = [self.persona_transmitter for _ in range(len(send_messages_list[0]))]
+        batch_history = [self.persona_cosplay for _ in range(len(send_messages_list[0]))]
         for receive_messages, send_messages in zip(receive_messages_list, send_messages_list):
             # for every message
             indexes = range(len(receive_messages))
@@ -1228,7 +1237,7 @@ class PSquareAgent(Agent):
                               for interaction in send_messages_list]
 
         fcg_rewards, recall_rewards = cal_finding_common_ground_score(send_messages_list, receive_messages_list,
-                                                                      self.persona_transmitter, partner_persona,
+                                                                      self.persona_cosplay, partner_persona,
                                                                       self.kw_graph_distance_matrix, self.device,
                                                                       r=r)
         fcg_rewards = torch.tensor(fcg_rewards).cpu().numpy()
@@ -1259,11 +1268,11 @@ class PSquareAgent(Agent):
         path = self.opt.get('model_file', None) if path is None else path
 
         if path:
-            optimizer = getattr(self, 'transmitter_optimizer', None)
-            component = getattr(self, 'transmitter')
+            optimizer = getattr(self, 'cosplay_optimizer', None)
+            component = getattr(self, 'cosplay')
             model = {'model': component.state_dict(), 'longest_label': component.longest_label,
                      'optimizer': optimizer.state_dict() if optimizer is not None else None,
-                     'optimizer_type': self.opt['optimizer_transmitter'], 'opt': self.opt}
+                     'optimizer_type': self.opt['optimizer_cosplay'], 'opt': self.opt}
 
             with open(path, 'wb') as write:
                 torch.save(model, write)

@@ -17,3 +17,8 @@ def SET_EXPANSION():
 
 def EVALUATION():
     pass
+
+
+# RL
+def COSPLAY_PRED():
+    pass

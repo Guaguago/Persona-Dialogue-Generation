@@ -13,9 +13,9 @@ def setup_task():
 
 def setup_trained_weights():
     if IS_ORIGINAL:
-        weights_name = '/apdcephfs/share_916081/chencxu/pegg/AAAI/2g-o-4/psquare/r-o-18.model'
+        weights_name = '/apdcephfs/share_916081/chencxu/pegg/AAAI/2g-o-4/cosplay_rl/r-o-18.model'
     else:
-        weights_name = './tmp/psquare/psqaure_revised.model'
+        weights_name = './tmp/cosplay_rl/psqaure_revised.model'
     return weights_name
 
 

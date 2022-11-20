@@ -1,5 +1,5 @@
 """Self-play between two user agents with initial message provided by the task_agents"""
-from ground_transition import cal_final_reward
+from concept_set_framework import cal_final_reward
 from parlai.core.agents import _create_task_agents
 from parlai.core.worlds import DialogPartnerWorld, BatchWorld
 import numpy as np

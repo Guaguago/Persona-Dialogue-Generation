@@ -19,11 +19,11 @@ IS_ORIGINAL = True
 FCG, RECALL, COHE, LM = 1., 1., 1., 1.
 
 BEAM_SIZE = 2
-MODEL_NAME = 'rl-o-13'
-RECALL_R = 0.5
-
-MODEL_DIR = '/apdcephfs/share_916081/chencxu/pegg/AAAI/train-o-18'
-DATA_DIR = '/apdcephfs/share_916081/chencxu/pegg/data'
+MODEL_NAME = 'cosplay'
+RECALL_R = 0.2
+BASE_DIR = '/apdcephfs/private_chencxu/taiji_outputs/cosplay/models/supervised'
+MODEL_DIR = '/apdcephfs/private_chencxu/taiji_outputs/cosplay/models/reinforced'
+DATA_DIR = '/apdcephfs/private_chencxu/taiji_inputs/cosplay/data'
 
 
 def set_seed(seed=1):
@@ -38,12 +38,12 @@ def setup_args():
 
     if IS_ORIGINAL:
         # receiver_basic = 'receiver_revised'
-        transmitter_basic = 'pegg-o'
+        cosplay_basic = 'cosplay_base'
         exp_task = 'tasks.convai2.agents:OriginalTeacher,tasks.convai2.agents:OriginalPersonaTeacher'
         exp_eval_task = 'tasks.convai2cosplay.agents:SelfOriginalTeacher:no_cands'
     else:
         # receiver_basic = 'receiver_original'
-        transmitter_basic = 'pegg-r'
+        cosplay_basic = 'pegg-r'
         exp_task = 'tasks.convai2.agents:RevisedTeacher,tasks.convai2.agents:RevisedPersonaTeacher'
         exp_eval_task = 'tasks.convai2cosplay.agents:SelfRevisedTeacher:no_cands'
 
@@ -75,8 +75,8 @@ def setup_args():
         datatype='train',
         history_replies='label_else_model',
         # model configuration
-        model='agents.psquare.psquare:PSquareAgent',
-        model_file='{}/psquare/{}.model'.format(MODEL_DIR, exp_name),
+        model='agents.cosplay_rl.cosplay_rl:CosplayRLAgent',
+        model_file='{}/{}.model'.format(MODEL_DIR, exp_name),
         lr=1e-6,
         gpt_lr=1e-6,
         # world sample configuration
@@ -85,9 +85,9 @@ def setup_args():
         gradient_clip=1.0,
         encode_max_seq_len=encode_max_seq_len,
         decode_max_seq_len=decode_max_seq_len,
-        # transmitter initialization
-        init_model_transmitter='{}/transmitter/{}.model'.format(MODEL_DIR, transmitter_basic),
-        rnn_class_transmitter='lstm',
+        # supervised cosplay initialization
+        init_model_cosplay='{}/{}.model'.format(BASE_DIR, cosplay_basic),
+        rnn_class_cosplay='lstm',
         lookuptable_transmitter='enc_dec',
         embedding_type_transmitter='glove_fixed',
         optimizer_step=-1,
@@ -95,7 +95,7 @@ def setup_args():
         # model_receiver='agents.receiver.receiver:ReceiverAgent',
         # init_model_receiver='./tmp/receiver/{}.model'.format(receiver_basic),
         # language model configuration
-        init_model_coherent='{}/transmitter/{}.model'.format(MODEL_DIR, transmitter_basic),
+        init_model_coherent='{}/{}.model'.format(BASE_DIR, cosplay_basic),
         # validation configuration
         validation_max_exs=validation_max,  # -1
         validation_every_n_secs=2400,  # 90
