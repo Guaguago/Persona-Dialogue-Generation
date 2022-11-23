@@ -28,7 +28,7 @@ from os import path
 import json
 from agents.cosplay_rl.utils import LanguageModel
 from concept_set_framework import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_map, \
-    cal_context_set, cal_concept_set, load_concept_dist_matrix, create_concept_dist_matrix
+    cal_concept_set, load_concept_dist_matrix, create_concept_dist_matrix
 from concept_set_framework import prepare_batch_persona_concept_mask, prepare_batch_for_kw_model
 from concept_set_framework import cal_word2concept_map, get_keyword_mask_matrix
 from concept_set_framework import cal_finding_common_ground_score
@@ -46,28 +46,6 @@ def _setup_op(opt, component):
             new_opt[new_k] = v
     return new_opt
 
-
-def _init_receiver(opt):
-    print('------------------------------')
-    print('[ Initialize the receiver ... ]')
-    opt = _setup_op(opt, component='receiver')
-    print('[ Override the GPU ID ... ]')
-    # TODO: always assuming the receiver in gpu 1
-    opt['override'] = {'gpu': 1,
-                       'dict_file': opt['dict_file'],
-                       'datapath': './data',
-                       'model_file': './tmp/receiver/receiver_original.model',
-                       'download_path': './download_path'}
-
-    if opt.get('init_model') is None:
-        raise Exception('Please specify the init_model_receiver!')
-    else:
-        if not os.path.exists(opt.get('init_model')):
-            raise FileNotFoundError('Sorry, but I can not find file {}'.format(opt.get('init_model')))
-    opt['model_file'] = opt['init_model']
-    receiver_agent = create_agent(opt)
-    print('[ Receiver initialized!]')
-    return receiver_agent.encoder, receiver_agent.dict
 
 
 class CosplayRLAgent(Agent):
@@ -268,7 +246,7 @@ class CosplayRLAgent(Agent):
                            help='Report frequency of prediction during eval.')
         agent.add_argument('--no-cuda', action='store_true', default=False,
                            help='disable GPUs even if available')
-        agent.add_argument('-gpu', '--gpu', type=int, default=-1,
+        agent.add_argument('-gpu', '--gpu', type=int, default=0,
                            help='which GPU device to use')
         agent.add_argument('-blf', '--beam_log_freq', default=0, help='log beam search results')
 
@@ -453,7 +431,7 @@ class CosplayRLAgent(Agent):
             if init_language is not None:
                 print('[ Loading coherent model from {} ]'.format(init_language))
                 language_status, language_opt = self.load(init_language, override=False)
-                language_opt['gpu'] = 1
+                language_opt['gpu'] = 0
 
             coherent_gpt_model = Gpt2SeqModel(opt=language_opt,
                                               vocab_size=len(self.dict),
@@ -485,8 +463,8 @@ class CosplayRLAgent(Agent):
             if self.use_cuda:
                 print('[ Using CUDA ]')
                 self.cosplay.cuda()
-                self.coherent_model.cuda("cuda:1")
-                self.language_model.cuda('cuda:1')
+                self.coherent_model.cuda("cuda:0")
+                self.language_model.cuda('cuda:0')
                 self.device = torch.device('cuda')
             else:
                 print('[ Using CPU ]')
