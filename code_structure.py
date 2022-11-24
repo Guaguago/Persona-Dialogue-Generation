@@ -22,3 +22,6 @@ def EVALUATION():
 # RL
 def COSPLAY_PRED():
     pass
+
+def REWARD():
+    pass

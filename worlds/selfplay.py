@@ -1,4 +1,5 @@
 """Self-play between two user agents with initial message provided by the task_agents"""
+from code_structure import REWARD
 from concept_set_framework import cal_final_reward
 from parlai.core.agents import _create_task_agents
 from parlai.core.worlds import DialogPartnerWorld, BatchWorld
@@ -215,7 +216,7 @@ class SelfPlayWorld(DialogPartnerWorld):
             diff_reward = max_language_reward - min_language_reward + 1e-6
             agent_a_language_reward = (agent_a_language_reward - min_language_reward) / diff_reward
             # agent_b_language_reward = agents[1].language_score()
-
+            REWARD()
             agent_a_fcg_reward, agent_a_recall_reward = agents[0].finding_common_ground_score(
                 agents[1].persona_transmitter, r=self.opt.get('recall_r'))
             min_fcg_reward = agent_a_fcg_reward.min()
