@@ -7,7 +7,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from code_structure import LOAD_CONCEPT_DIST_MATRIX, CALCULATE_CONCEPT_SET, COSPLAY_PRED
+from code_structure import LOAD_CONCEPT_DIST_MATRIX, CALCULATE_CONCEPT_SET, COSPLAY_PRED, COMMON_GROUND_REWARD, \
+    PERSONA_RECALL_SCORE
 from parlai.core.agents import Agent, create_agent
 from parlai.core.dict import DictionaryAgent
 from parlai.core.thread_utils import SharedTable
@@ -28,10 +29,10 @@ from os import path
 import json
 from agents.cosplay_rl.utils import LanguageModel
 from concept_set_framework import prepare_example_persona_kws, prepare_example_for_kw_model, cal_concept2word_map, \
-    cal_concept_set, load_concept_dist_matrix, create_concept_dist_matrix
+    cal_concept_set, load_concept_dist_matrix, create_concept_dist_matrix, set_union_operation, set_dist_operation, \
+    concept_set, extract_concepts, persona_recall_score
 from concept_set_framework import prepare_batch_persona_concept_mask, prepare_batch_for_kw_model
 from concept_set_framework import cal_word2concept_map, get_keyword_mask_matrix
-from concept_set_framework import cal_finding_common_ground_score
 import torch.nn as nn
 
 task_key_word = 'OriginalPersonaTeacher'
@@ -45,7 +46,6 @@ def _setup_op(opt, component):
             new_k = k[:-len(component) - 1]
             new_opt[new_k] = v
     return new_opt
-
 
 
 class CosplayRLAgent(Agent):
@@ -1204,7 +1204,7 @@ class CosplayRLAgent(Agent):
         scores = np.nan_to_num(scores)
         return scores
 
-    def finding_common_ground_score(self, partner_persona, r=None):
+    def common_ground_reward_and_recall_scores(self, partner_persona, r=None):
         receive_messages_list = deepcopy(self.receive_messages)
         send_messages_list = deepcopy(self.send_messages)
 
@@ -1214,13 +1214,39 @@ class CosplayRLAgent(Agent):
         send_messages_list = [[message.replace(self.dict.end_token, '') for message in interaction]
                               for interaction in send_messages_list]
 
-        fcg_rewards, recall_rewards = cal_finding_common_ground_score(send_messages_list, receive_messages_list,
-                                                                      self.persona_cosplay, partner_persona,
-                                                                      self.kw_graph_distance_matrix, self.device,
-                                                                      r=r)
-        fcg_rewards = torch.tensor(fcg_rewards).cpu().numpy()
-        recall_rewards = torch.tensor(recall_rewards).cpu().numpy()
-        return fcg_rewards, recall_rewards
+        self_persona_concepts = extract_concepts(self.persona_cosplay, 50)
+        partner_persona_concepts = extract_concepts(partner_persona, 50)
+
+        self_persona_set = concept_set(self_persona_concepts, self.device)
+        partner_persona_set = concept_set(partner_persona_concepts, self.device)
+
+        batch_size = len(send_messages_list[0])
+        num_turn = len(send_messages_list)
+
+        common_ground_rewards = [[0 for _ in range(num_turn)] for _ in range(batch_size)]
+        recall_scores = [[0 for _ in range(num_turn)] for _ in range(batch_size)]
+        future_set = [torch.zeros(2680).to(self.device) for _ in range(batch_size)]
+        for idx_turn, receive_messages, send_messages in zip(
+                reversed(range(num_turn)), reversed(receive_messages_list), reversed(send_messages_list)):
+            for idx_batch, receive_message, send_message in zip(range(batch_size), receive_messages, send_messages):
+                current_turn_concepts = extract_concepts(send_message + ' ' + receive_message, 50)
+                current_turn_set = concept_set(current_turn_concepts, self.device)
+                future_set[idx_batch] = set_union_operation(current_turn_set, future_set[idx_batch])
+
+                COMMON_GROUND_REWARD()
+                d_FS = set_dist_operation(future_set[idx_batch], self_persona_set, self.kw_graph_distance_matrix)
+                d_FP = set_dist_operation(future_set[idx_batch], partner_persona_set, self.kw_graph_distance_matrix)
+                common_ground_rewards[idx_batch][idx_turn] += -(d_FS + d_FP)
+
+                PERSONA_RECALL_SCORE()
+                both_persona_set = set_union_operation(self_persona_set, partner_persona_set)
+                recall_score = persona_recall_score(both_persona_set, future_set[idx_batch],
+                                                    self.kw_graph_distance_matrix, r)
+                recall_scores[idx_batch][idx_turn] += recall_score / (num_turn - idx_turn + 1)
+
+        common_ground_rewards = torch.tensor(common_ground_rewards).cpu().numpy()
+        recall_scores = torch.tensor(recall_scores).cpu().numpy()
+        return common_ground_rewards, recall_scores
 
     def load(self, path, override=True):
         """Return opt and model states."""

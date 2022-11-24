@@ -43,7 +43,7 @@ def setup_seed(seed=1706123):
 
 
 def gpt_setting():
-    return 3, 1e-4, 'gpt_custom', 1.0
+    return 10, 1e-4, 'gpt_custom', 1.0
 
 
 def lstm_setting():
@@ -140,7 +140,7 @@ def setup_args():
         momentum=momentum,
         # rough enough
         validation_max_exs=-1,
-        validation_every_n_secs=100,
+        validation_every_n_secs=3600,
         validation_metric='f1',
         validation_metric_mode='min',
         validation_patience=5,
