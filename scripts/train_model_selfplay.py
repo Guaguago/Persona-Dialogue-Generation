@@ -198,7 +198,7 @@ class TrainLoop():
             self.impatience = 0
             if opt.get('model_file'):
                 print("[ saving best valid model: " + opt['model_file'] + " ]")
-                # the fine-tuned transmitter part is actually what we want for PSquare bot
+                # the fine-tuned cosplay base is actually what we want for cosplay rl
                 self.agent.save()
                 print("[ saving best valid metric: " + opt['model_file'] + ".best_valid ]")
                 save_best_valid(opt['model_file'], self.best_valid)
