@@ -19,7 +19,7 @@ from copy import deepcopy
 
 
 def _setup_op(opt, component='transmitter'):
-    assert component in ['transmitter', 'receiver']
+    assert component in ['transmitter', 'utils']
     new_opt = deepcopy(opt)
     for k,v in opt.items():
         if k.endswith(component):
@@ -98,9 +98,9 @@ def run_eval(agent, opt, datatype, max_exs=-1, write_log=False, valid_world=None
 
     metrics = datatype + ':' + str(valid_report)
     print(metrics)
-    if write_log and opt.get('model_file_transmitter') and opt.get('model_file_receiver'):
+    if write_log and opt.get('model_file_cosplay_base'):
         # Write out metrics
-        transmitter = opt['model_file_transmitter'].split('/')[-1]
+        transmitter = opt['model_file_cosplay_base'].split('/')[-1]
         receiver = opt['model_file_receiver'].split('/')[-1]
         f = open(opt['model_file'] + transmitter + '_' + receiver + '.' + datatype, 'a+')
         f.write(metrics + '\n')
@@ -121,8 +121,8 @@ class TrainLoop():
             opt = opt.parse_args()
         # Possibly build a dictionary (not all models do this).
         if opt['dict_build_first'] and 'dict_file' in opt:
-            if opt['dict_file'] is None and opt.get('model_file_transmitter') and opt.get('model_file_receiver'):
-                opt['dict_file'] = opt['model_file_transmitter'] + '_' + opt['model_file_receiver']  + '.dict'
+            if opt['dict_file'] is None and opt.get('model_file_cosplay_base'):
+                opt['dict_file'] = opt['model_file_cosplay_base'] + '.dict'
             print("[ building dictionary first... ]")
             build_dict(opt, skip_if_built=False)
 
@@ -135,10 +135,7 @@ class TrainLoop():
         self.agent_a.set_id(suffix=' A')
         print("[ create agent B ... ]")
         self.agent_b = create_agent_from_shared(shared)
-        # self.agent_b = create_agent(opt)
         self.agent_b.set_id(suffix=' B')
-        # self.agent_a.copy(self.agent, 'transmitter')
-        # self.agent_b.copy(self.agent, 'transmitter')
         self.world = create_selfplay_world(opt, [self.agent_a, self.agent_b])
 
         # TODO: if batch, it is also not parallel
@@ -159,8 +156,8 @@ class TrainLoop():
         self.save_every_n_secs = opt['save_every_n_secs'] if opt['save_every_n_secs'] > 0 else float('inf')
         self.valid_optim = 1 if opt['validation_metric_mode'] == 'max' else -1
         self.best_valid = None
-        if opt.get('model_file_transmitter') and os.path.isfile(opt['model_file_transmitter'] + '.best_valid'):
-            with open(opt['model_file_transmitter'] + ".best_valid", 'r') as f:
+        if opt.get('model_file_cosplay_base') and os.path.isfile(opt['model_file_cosplay_base'] + '.best_valid'):
+            with open(opt['model_file_cosplay_base'] + ".best_valid", 'r') as f:
                 x = f.readline()
                 self.best_valid = float(x)
                 f.close()
@@ -178,12 +175,9 @@ class TrainLoop():
             valid_world=self.valid_world)
         if opt['tensorboard_log'] is True:
             self.writer.add_metrics('valid', self.parleys_episode, valid_report)
-        if opt.get('model_file_transmitter') and opt.get('save_after_valid'):
-            print("[ saving transmitter checkpoint: " + opt['model_file_transmitter'] + ".checkpoint ]")
+        if opt.get('model_file_cosplay_base') and opt.get('save_after_valid'):
+            print("[ saving transmitter checkpoint: " + opt['model_file_cosplay_base'] + ".checkpoint ]")
             self.agent.save(component='transmitter')
-        # if opt.get('model_file_receiver') and opt.get('save_after_valid'):
-        #     print("[ saving receiver checkpoint: " + opt['model_file_receiver'] + ".checkpoint ]")
-        #     self.agent.save(component='receiver')
         if hasattr(self.agent, 'receive_metrics'):
             self.agent.receive_metrics(valid_report)
         if '/' in opt['validation_metric']:
@@ -290,20 +284,14 @@ class TrainLoop():
                         break
 
                 if self.save_time.time() > self.save_every_n_secs:
-                    if opt.get('model_file_transmitter'):
-                        print("[ saving transmitter checkpoint: " + opt['model_file_transmitter'] + ".checkpoint ]")
-                        self.agent.save(opt['model_file_transmitter'] + '.checkpoint', component='transmitter')
-                    if opt.get('model_file_receiver'):
-                        print("[ saving receiver checkpoint: " + opt['model_file_receiver'] + ".checkpoint ]")
-                        self.agent.save(opt['model_file_receiver'] + '.checkpoint', component='receiver')
+                    if opt.get('model_file_cosplay_base'):
+                        print("[ saving cosplay base checkpoint: " + opt['model_file_cosplay_base'] + ".checkpoint ]")
+                        self.agent.save(opt['model_file_cosplay_base'] + '.checkpoint', component='transmitter')
                     self.save_time.reset()
 
         if not self.saved:
-            # save agent
-            # self.agent.save(component='transmitter')
             self.agent.save()
-            # self.agent.save(component='receiver') # TODO: API for save all components
-        elif opt.get('model_file_transmitter') and opt.get('model_file_receiver'): # TODO: check if both components are necessary
+        elif opt.get('model_file_cosplay_base'):
             # reload best validation model
             self.agent = create_agent(opt)
 
