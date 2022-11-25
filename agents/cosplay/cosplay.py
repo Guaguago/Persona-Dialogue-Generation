@@ -35,7 +35,7 @@ from concept_set_framework import get_keyword_mask_matrix, create_concept_dist_m
 from concept_set_framework import prepare_example_persona_kws, prepare_batch_persona_concept_mask
 
 # lstm, transformer, gpt2
-from ..utils.receiver import split_pad_vector
+from ..utils.utils import split_pad_vector
 
 ARCH_CHOICE = 'gpt'
 

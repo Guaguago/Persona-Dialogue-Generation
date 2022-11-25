@@ -17,7 +17,7 @@ from agents.cosplay.cosplay import GPTDictionaryAgent, Gpt2SeqModel
 from agents.cosplay.utils import maintain_dialog_history, PaddingUtils, round_sigfigs
 from agents.cosplay.seq2seq.model import Seq2seqModel
 from torch.optim import SGD, lr_scheduler, Adagrad
-from agents.utils.receiver import split_pad_vector, split_pad_vector_for_bug
+from agents.utils.utils import split_pad_vector, split_pad_vector_for_bug
 from agents.cosplay_rl.utils import prepare_for_understand
 from agents.common.dict_helper import SpecialToken
 from agents.cosplay.gpt.loss import TokenCrossEntropyLoss
