@@ -350,7 +350,7 @@ class CosplayRLAgent(Agent):
             # language model to score
             self.coherent_model = shared['coherent_model']
             self.language_model = shared['language_model']
-            self.id = 'Pegg Agent'
+            self.id = 'Cosplay Agent'
         else:
             if self.use_cuda:
                 print('[ Using CUDA (GPU:{})]'.format(opt['gpu']))
@@ -361,7 +361,7 @@ class CosplayRLAgent(Agent):
                 self.device = torch.device('cpu')
 
             self.answers = [None] * self.batch_size
-            self.id = 'Pegg Agent'
+            self.id = 'Cosplay Agent'
             self.dict = self.dictionary_class()(opt)
 
             # idea interface
@@ -640,7 +640,7 @@ class CosplayRLAgent(Agent):
             # idea interface
             # self.history[labels]
 
-            if 'Pegg' in act[0]['id'] and 'init' not in self.observation[0][
+            if 'Cosplay' in act[0]['id'] and 'init' not in self.observation[0][
                 'id']:  # Only add dialogue text excluding the persona text
                 if len(self.send_messages) == 0:  # At the beginning of an episode
                     if len(self.receive_messages) == 0:  # The first speaker receive no text before it first speaks
@@ -790,7 +790,7 @@ class CosplayRLAgent(Agent):
                 ob['text2vec'] = deque(ob['text2vec'], maxlen=self.truncate)
                 ob['turn2vec'] = deque(ob['turn2vec'], maxlen=self.truncate)
 
-        if self.is_training and 'Pegg' in first_obs['id'] and not first_obs['episode_done']:
+        if self.is_training and 'Cosplay' in first_obs['id'] and not first_obs['episode_done']:
             # observe text from the other interlocutor
             self.receive_messages.append([ob['text'] for ob in obs])
             # obs['text'] = self.persona + obs['text'] # Adding persona to the beginning of each turn
@@ -802,7 +802,7 @@ class CosplayRLAgent(Agent):
             self.observation = obs[0]
 
         if self.is_training and first_obs['episode_done'] \
-                and 'reward' in first_obs and 'Pegg' in first_obs['id'] and not self.greedy_response:
+                and 'reward' in first_obs and 'Cosplay' in first_obs['id'] and not self.greedy_response:
             # end of an self-play episode, backwards propagation
             # assume each turn, each word has similar proportion of rewards
             rewards = np.stack([o['reward'] for o in obs])  # average the reward over turns

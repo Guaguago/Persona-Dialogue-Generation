@@ -10,8 +10,6 @@ import torch
 
 from scripts.train_model_selfplay import setup_args as setup_args_dict, TrainLoop
 
-# TODO: must at least two GPU as the receiver & transmitter cannot be run in the same GPU card
-#  within less than 24GB memory.
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 IS_ORIGINAL = True
@@ -37,13 +35,11 @@ def setup_args():
     decode_max_seq_len = 24
 
     if IS_ORIGINAL:
-        # receiver_basic = 'receiver_revised'
         cosplay_basic = 'cosplay_base'
         exp_task = 'tasks.convai2.agents:OriginalTeacher,tasks.convai2.agents:OriginalPersonaTeacher'
         exp_eval_task = 'tasks.convai2cosplay.agents:SelfOriginalTeacher:no_cands'
     else:
-        # receiver_basic = 'receiver_original'
-        cosplay_basic = 'pegg-r'
+        cosplay_basic = 'cosplay_base'
         exp_task = 'tasks.convai2.agents:RevisedTeacher,tasks.convai2.agents:RevisedPersonaTeacher'
         exp_eval_task = 'tasks.convai2cosplay.agents:SelfRevisedTeacher:no_cands'
 
