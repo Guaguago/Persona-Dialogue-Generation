@@ -14,7 +14,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 IS_ORIGINAL = True
 
-FCG, RECALL, COHE, LM = 1., 1., 1., 1.
+MUTUAL_BENEFIT, COMMON_GROUND, LM = 1., 1., 1.
 
 BEAM_SIZE = 2
 MODEL_NAME = 'cosplay'
