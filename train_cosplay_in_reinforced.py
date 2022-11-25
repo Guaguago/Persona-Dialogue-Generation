@@ -1,6 +1,6 @@
 """
 Double Dual Training
-1 Policy Gradient Training with Pre-trained Transmitter & Receiver
+1 Policy Gradient Training with Supervised Pre-trained Cosplay
 - Training in Self-play World
 - Evaluate in convai2:self
 """
@@ -50,7 +50,7 @@ def setup_args():
     # exp_name = 'DEBUG'
     parser.set_defaults(
         # idea add ================
-        weights=[FCG, RECALL, COHE, LM],
+        weights=[MUTUAL_BENEFIT, COMMON_GROUND, LM],
         recall_r=RECALL_R,
         # =======================
         download_path='{}/downloads'.format(DATA_DIR),
@@ -87,10 +87,6 @@ def setup_args():
         lookuptable_transmitter='enc_dec',
         embedding_type_transmitter='glove_fixed',
         optimizer_step=-1,
-        # receiver configuration
-        # model_receiver='agents.receiver.receiver:ReceiverAgent',
-        # init_model_receiver='./tmp/receiver/{}.model'.format(receiver_basic),
-        # language model configuration
         init_model_coherent='{}/{}.model'.format(BASE_DIR, cosplay_basic),
         # validation configuration
         validation_max_exs=validation_max,  # -1
