@@ -15,15 +15,15 @@ import numpy as np
 # from kw_model import KW_GNN
 
 _lemmatizer = WordNetLemmatizer()
-name_list = ['keyword2id', 'id2keyword', 'node2id', 'word2id', 'CN_hopk_graph_dict']
+name_list = ['concept2id', 'id2concept', 'node2id', 'word2id', 'CN_hopk_graph_dict']
 
 pkl_list = []
 for name in name_list:
-    with open('/apdcephfs/private_chencxu/taiji_inputs/cosplay/data/kw_model/{}.pkl'.format(name),
+    with open('/apdcephfs/private_chencxu/taiji_inputs/cosplay/data/concept_set_framework/{}.pkl'.format(name),
               "rb") as f:
         pkl_list.append(pickle.load(f))
 
-concept2id, id2keyword, node2id, word2id, CN_hopk_graph_dict = pkl_list
+concept2id, id2concept, node2id, word2id, CN_hopk_graph_dict = pkl_list
 
 
 # idea interface
@@ -73,31 +73,6 @@ def load_concept_dist_matrix(pkl_file):
     return ret
 
 
-## kw model forward
-def cal_kw_logits(inputs_for_kw_model, keyword_mask_matrix, kw_model):
-    batch_context = inputs_for_kw_model['batch_context']
-    batch_context_keywords = inputs_for_kw_model['batch_context_keywords']
-    batch_context_concepts = inputs_for_kw_model['batch_context_concepts']
-    CN_hopk_edge_index = inputs_for_kw_model['CN_hopk_edge_index']
-    with torch.no_grad():
-        kw_logits, kw_hidden_states = kw_model(CN_hopk_edge_index, batch_context_keywords,
-                                               x_utter=batch_context,
-                                               x_concept=batch_context_concepts)  # (batch_size, keyword_vocab_size)
-
-        # if keyword_mask_matrix is not None:
-        #     batch_vocab_mask = keyword_mask_matrix[batch_context_keywords].sum(dim=1).clamp(min=0,
-        #                                                                                     max=1)  # (batch_size, keyword_vocab_size)
-        #     kw_logits = (1 - batch_vocab_mask) * (
-        #         -5e4) + batch_vocab_mask * kw_logits  # (batch, vocab_size), masked logits
-
-    # if 0 != kw_logits.max() - kw_logits.min:
-    #     print()
-
-    # top_kws = kw_logits.topk(3, dim=-1)[1]
-    # (batch_size, 3), need to convert to vocab token id based on word2id
-    return kw_logits, kw_hidden_states
-
-
 def visualize_samples(data_for_visualization, dict, valid_inds, observations):
     i = random.randint(0, len(data_for_visualization) - 1)
     prediction = data_for_visualization[i]['prediction']
@@ -113,9 +88,9 @@ def visualize_samples(data_for_visualization, dict, valid_inds, observations):
     #  construct visulization strings
     line_outputs = dict.vec2words(prediction.tolist())
     vis_prediction = ' '.join(['{:>5}'.format(i) for i in line_outputs])
-    # vis_from_context_probs = visualize_topk_nodes_with_values(from_context_probs, id2keyword, k=8, concept=True)
-    # vis_to_persona_probs = visualize_topk_nodes_with_values(to_persona_probs, id2keyword, k=8, concept=True)
-    # vis_concept_probs = visualize_topk_nodes_with_values(concept_probs, id2keyword, k=8, concept=True)
+    # vis_from_context_probs = visualize_topk_nodes_with_values(from_context_probs, id2concept, k=8, concept=True)
+    # vis_to_persona_probs = visualize_topk_nodes_with_values(to_persona_probs, id2concept, k=8, concept=True)
+    # vis_concept_probs = visualize_topk_nodes_with_values(concept_probs, id2concept, k=8, concept=True)
     vis_lm_word_probs = visualize_topk_nodes_with_values(lm_word_probs, dict, k=5, concept=False, matrix=True)
     vis_concept_word_probs = visualize_topk_nodes_with_values(concept_word_probs, dict, k=5, concept=False,
                                                               matrix=True)
