@@ -4,8 +4,9 @@ IS_ORIGINAL = True
 
 # ---------------------
 VIS = True
-# CSV = '/apdcephfs/share_916081/chencxu/pegg/test.csv'
 CSV = None
+
+
 # ---------------------
 
 def setup_task():
@@ -18,9 +19,9 @@ def setup_task():
 
 def setup_trained_weights():
     if IS_ORIGINAL:
-        weights_name = '/apdcephfs/share_916081/chencxu/pegg/AAAI/2g-o-4/cosplay_rl/r-o-18.model'
+        weights_name = '/apdcephfs/private_chencxu/taiji_outputs/cosplay/models/reinforced/cosplay.model'
     else:
-        weights_name = './tmp/cosplay_rl/psqaure_revised.model'
+        weights_name = '/apdcephfs/private_chencxu/taiji_outputs/cosplay/models/reinforced/cosplay.model'
     return weights_name
 
 
@@ -46,8 +47,8 @@ if __name__ == '__main__':
     parser = setup_args()
     model_name = setup_trained_weights()
     parser.set_params(
-        datapath='/apdcephfs/share_916081/chencxu/pegg/data',
-        model='agents.transmitter.transmitter:TransformerAgent',
+        datapath='/apdcephfs/private_chencxu/taiji_inputs/cosplay/data',
+        model='agents.cosplay.cosplay:TransformerAgent',
         model_file=model_name,
         gpu=0,
         batchsize=1,
